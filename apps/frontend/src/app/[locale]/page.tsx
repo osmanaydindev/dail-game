@@ -40,8 +40,9 @@ export default function HomePage() {
       {/* ── Hero ──────────────────────────────────────────────────────────── */}
       <Box position="relative" mb={14} minH={{ base: '320px', md: '400px' }}>
 
-        {/* Gradient orbs — react to mouse */}
-        <Box position="absolute" inset={0} pointerEvents="none" overflow="hidden" borderRadius="3xl" zIndex={0}>
+        {/* Gradient orbs — react to mouse. Hidden on mobile: huge blur() layers are
+            very expensive to composite and there is no mouse to react to there. */}
+        <Box display={{ base: 'none', md: 'block' }} position="absolute" inset={0} pointerEvents="none" overflow="hidden" borderRadius="3xl" zIndex={0}>
           <Box
             position="absolute" w="640px" h="640px" borderRadius="full"
             style={{
@@ -175,7 +176,7 @@ export default function HomePage() {
           <motion.div
             animate={{ x: '-50%' }}
             transition={{ duration: 40, repeat: Infinity, ease: 'linear' }}
-            style={{ display: 'flex', gap: '5rem', width: 'max-content', whiteSpace: 'nowrap' }}
+            style={{ display: 'flex', gap: '5rem', width: 'max-content', whiteSpace: 'nowrap', willChange: 'transform' }}
           >
             {[...TICKER, ...TICKER].map((item, i) => (
               <Text key={i} fontSize="sm" color="text.muted" fontWeight="500">

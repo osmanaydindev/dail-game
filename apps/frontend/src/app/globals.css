@@ -22,11 +22,25 @@
 }
 
 /* ─── CTA button glow pulse ──────────────────────────────────────────────── */
-@keyframes ao-shadow-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(58, 95, 255, 0.5); }
-  50%       { box-shadow: 0 0 0 14px rgba(58, 95, 255, 0); }
+/* Animate only opacity of a pre-rendered shadow ring (compositor-only) instead
+   of animating box-shadow itself, which repaints every frame and janks on mobile. */
+.ao-cta-glow { position: relative; isolation: isolate; }
+.ao-cta-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: 0 0 0 7px rgba(58, 95, 255, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  z-index: -1;
+  will-change: opacity;
+  animation: ao-glow-pulse 2.5s ease-in-out infinite;
 }
-.ao-cta-glow { animation: ao-shadow-pulse 2.5s ease-in-out infinite; }
+@keyframes ao-glow-pulse {
+  0%, 100% { opacity: 0; }
+  50%      { opacity: 1; }
+}
 
 /* ─── Score bar fill ─────────────────────────────────────────────────────── */
 @keyframes ao-bar-fill {
@@ -58,4 +72,21 @@
 @keyframes ao-spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
+}
+
+/* ─── Mobile: drop continuously-repainting effects to keep scrolling smooth ── */
+@media (max-width: 767px) {
+  /* background-position animation on background-clip:text repaints glyphs every
+     frame — keep the gradient, lose the per-frame repaint on phones. */
+  .ao-gradient-text { animation: none; }
+}
+
+/* ─── Respect reduced-motion preference ──────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  .ao-float,
+  .ao-gradient-text,
+  .ao-cta-glow::after,
+  .ao-row-in,
+  .ao-fade-up,
+  .ao-spin-slow { animation: none !important; }
 }
