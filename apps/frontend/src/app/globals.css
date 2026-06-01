@@ -82,9 +82,24 @@
 }
 
 /* ─── Tavla: hide the header on landscape phones to free vertical space ───── */
+/* Also lock the page to the viewport height (no scroll) so the board cannot be
+   panned/zoomed around — it stays centered and fully visible. */
 @media (orientation: landscape) and (max-height: 500px) {
+  body:has(.ao-immersive-landscape) { overflow: hidden; }
   .ao-immersive-landscape > nav { display: none; }
-  .ao-immersive-landscape > main { padding-top: 0 !important; }
+  .ao-immersive-landscape {
+    height: 100dvh;
+    overflow: hidden;
+  }
+  .ao-immersive-landscape > main {
+    padding: 0 !important;
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
 }
 
 /* ─── Respect reduced-motion preference ──────────────────────────────────── */

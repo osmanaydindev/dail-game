@@ -196,13 +196,18 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-    // Space below the board reserved for the dice/action buttons row.
-    const RESERVE_BOTTOM = 88;
+    // Landscape phone: header is hidden and the board must fit the viewport height.
+    // Reserve a fixed band for the player bar (top) + dice/action buttons (bottom).
+    // Using a constant (not getBoundingClientRect) keeps the size independent of
+    // scroll/pan position, so the board never resizes while the user pans around.
+    const RESERVE_VERTICAL = 124;
+    const isLandscapePhone = () =>
+      typeof window !== 'undefined' &&
+      window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
     const update = () => {
       const w = el.clientWidth;
       if (w < 10) return;
-      const top = el.getBoundingClientRect().top;
-      const availH = (typeof window !== 'undefined' ? window.innerHeight : 0) - top - RESERVE_BOTTOM;
+      const availH = isLandscapePhone() ? window.innerHeight - RESERVE_VERTICAL : undefined;
       const g = makeGeo(w, availH);
       const cur = geoRef.current;
       // Skip no-op updates to avoid a ResizeObserver feedback loop.

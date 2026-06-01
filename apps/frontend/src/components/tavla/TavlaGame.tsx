@@ -358,6 +358,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const justMovedRef = useRef(false);
   const myColorRef = useRef<Color>('white');
   const boardRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const [phase, setPhase] = useState<'lobby' | 'waiting' | 'playing'>('lobby');
   const [gameState, setGameState] = useState<GameState | null>(null);
@@ -372,9 +373,40 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const [animDice, setAnimDice] = useState<number[] | null>(null);
   const [isAnimating, setIsAnimating] = useState(false);
   const [showTurnNotif, setShowTurnNotif] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  const [fsSupported, setFsSupported] = useState(false);
 
   // Keep myColorRef in sync so animation callbacks can read current color
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
+
+  // ── Fullscreen (hide the browser URL bar like a video) ──────────────────────
+  // Element fullscreen works on Android/desktop Chrome; iOS Safari does not
+  // support it for non-video elements, so we hide the button there.
+  useEffect(() => {
+    setFsSupported(typeof document !== 'undefined' && !!document.fullscreenEnabled);
+    const onFs = () => {
+      const fs = !!document.fullscreenElement;
+      setIsFullscreen(fs);
+      if (!fs) { try { (screen.orientation as { unlock?: () => void })?.unlock?.(); } catch { /* ignore */ } }
+    };
+    document.addEventListener('fullscreenchange', onFs);
+    return () => document.removeEventListener('fullscreenchange', onFs);
+  }, []);
+
+  const toggleFullscreen = useCallback(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    if (!document.fullscreenElement) {
+      el.requestFullscreen?.()
+        .then(() => {
+          // Best-effort: rotate to landscape and keep it (Android only).
+          (screen.orientation as { lock?: (o: string) => Promise<void> })?.lock?.('landscape').catch(() => {});
+        })
+        .catch(() => {});
+    } else {
+      document.exitFullscreen?.().catch(() => {});
+    }
+  }, []);
 
   // ── Dice animation ─────────────────────────────────────────────────────────
   const startDiceAnimation = useCallback((finalState: GameState) => {
@@ -652,7 +684,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const showLandscapeOverlay = isPortraitMobile && !portraitDismissed;
 
   return (
-    <Box position="relative" w="full">
+    <Box ref={containerRef} position="relative" w="full" bg="surface">
     {/* Portrait mobile landscape hint overlay */}
     {showLandscapeOverlay && (
       <Box
@@ -785,6 +817,11 @@ export function TavlaGame({ user }: TavlaGameProps) {
       <HStack gap={4} align="center">
         {isMyTurn && gameState.phase === 'rolling' && (
           <DragDice boardRef={boardRef} onRoll={handleRoll} disabled={isAnimating} />
+        )}
+        {fsSupported && (
+          <Button variant="ghost" size="sm" onClick={toggleFullscreen} aria-label="Tam ekran">
+            {isFullscreen ? '⛶ Çık' : '⛶ Tam Ekran'}
+          </Button>
         )}
         {gameState.phase !== 'ended' && (
           <Button variant="outline" colorPalette="red" size="sm" onClick={handleResign}>
