@@ -194,45 +194,17 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     return () => ro.disconnect();
   }, []);
 
-  // ── Internal move animation ───────────────────────────────────────────────
-  const prevStateRef  = useRef<GameState | null>(null);
-  const animInfoRef   = useRef<AnimInfo | null>(null);
-  const rafRef        = useRef<number | null>(null);
-  const [animProgress, setAnimProgress] = useState(0);
+  // ── Internal move animation (rAF-driven, no per-frame React state) ─────────
+  const prevStateRef    = useRef<GameState | null>(null);
+  const animInfoRef     = useRef<AnimInfo | null>(null);
+  const rafRef          = useRef<number | null>(null);
+  const animProgressRef = useRef(0);
+  const offscreenRef    = useRef<HTMLCanvasElement | null>(null);
+  const drawRef         = useRef<() => void>(() => {});
 
-  useEffect(() => {
-    const prev = prevStateRef.current;
-    prevStateRef.current = state;
-    if (!prev || !boardChanged(prev, state)) return;
-
-    const move = detectMove(prev, state);
-    if (!move) return;
-
-    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
-    animInfoRef.current = { ...move, displayState: prev };
-    const startTime = performance.now();
-
-    const step = (now: number) => {
-      const t = Math.min((now - startTime) / 280, 1);
-      setAnimProgress(t);
-      if (t < 1) {
-        rafRef.current = requestAnimationFrame(step);
-      } else {
-        animInfoRef.current = null;
-        rafRef.current = null;
-      }
-    };
-    rafRef.current = requestAnimationFrame(step);
-  }, [state]);
-
-  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
-
-  // ── Render ─────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d')!;
-    const g = geo;
+  // Static layer — the full scene WITHOUT the moving piece. Cacheable to an
+  // offscreen canvas during an animation so each frame only needs a blit.
+  const drawStatic = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
     const { W, H, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S } = g;
     ctx.clearRect(0, 0, W, H);
 
@@ -338,44 +310,6 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
       }
     }
 
-    // ── Animated moving piece ──────────────────────────────────────────────
-    if (anim) {
-      const ease = 1 - Math.pow(1 - animProgress, 3);
-
-      let fx: number, fy: number;
-      if (anim.from === 'bar') {
-        const n = Math.max(0, anim.displayState.bar[anim.color] - 1);
-        fx = bx; fy = barY(g, anim.color, n);
-      } else {
-        const count = Math.abs(anim.displayState.board[anim.from as number]);
-        const pos = checkerXY(g, anim.from as number, Math.max(0, count - 1));
-        fx = pos.x; fy = pos.y;
-      }
-
-      let tx: number, ty: number;
-      if (anim.to === 'off') {
-        tx = W - BORDER / 2;
-        ty = anim.color === 'white' ? BOARD_Y + BOARD_H - 10 : BOARD_Y + 10;
-      } else if (anim.to === 'bar') {
-        const n = state.bar[anim.color] - 1;
-        tx = bx; ty = barY(g, anim.color, Math.max(0, n));
-      } else {
-        const friendly = anim.color === 'white'
-          ? Math.max(0, state.board[anim.to as number])
-          : Math.max(0, -state.board[anim.to as number]);
-        const pos = checkerXY(g, anim.to as number, Math.max(0, friendly - 1));
-        tx = pos.x; ty = pos.y;
-      }
-
-      const ax = fx + (tx - fx) * ease;
-      const ay = fy + (ty - fy) * ease;
-      ctx.globalAlpha = 0.2;
-      ctx.beginPath(); ctx.arc(ax + 2, ay + 3, CR, 0, Math.PI * 2);
-      ctx.fillStyle = '#000'; ctx.fill();
-      ctx.globalAlpha = 1;
-      drawChecker(ctx, ax, ay, anim.color, false, CR);
-    }
-
     ctx.restore();
 
     // ── Dice — drawn after restore (always upright) ───────────────────────
@@ -403,7 +337,120 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     }
     // suppress unused warning
     void POINT_H;
-  }, [state, myColor, flip, selected, validMoves, animDice, animProgress, geo, dark, light, boardBg, borderColor]);
+  }, [state, myColor, flip, selected, validMoves, animDice, geo, dark, light, boardBg, borderColor]);
+
+  // ── Moving piece overlay — drawn on top of the static layer each frame ─────
+  const drawMoving = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
+    const anim = animInfoRef.current;
+    if (!anim) return;
+    const { W, H, BORDER, BOARD_Y, BOARD_H, CR } = g;
+    const bx = barX(g);
+    const ease = 1 - Math.pow(1 - animProgressRef.current, 3);
+
+    let fx: number, fy: number;
+    if (anim.from === 'bar') {
+      const n = Math.max(0, anim.displayState.bar[anim.color] - 1);
+      fx = bx; fy = barY(g, anim.color, n);
+    } else {
+      const count = Math.abs(anim.displayState.board[anim.from as number]);
+      const pos = checkerXY(g, anim.from as number, Math.max(0, count - 1));
+      fx = pos.x; fy = pos.y;
+    }
+
+    let tx: number, ty: number;
+    if (anim.to === 'off') {
+      tx = W - BORDER / 2;
+      ty = anim.color === 'white' ? BOARD_Y + BOARD_H - 10 : BOARD_Y + 10;
+    } else if (anim.to === 'bar') {
+      const n = state.bar[anim.color] - 1;
+      tx = bx; ty = barY(g, anim.color, Math.max(0, n));
+    } else {
+      const friendly = anim.color === 'white'
+        ? Math.max(0, state.board[anim.to as number])
+        : Math.max(0, -state.board[anim.to as number]);
+      const pos = checkerXY(g, anim.to as number, Math.max(0, friendly - 1));
+      tx = pos.x; ty = pos.y;
+    }
+
+    const ax = fx + (tx - fx) * ease;
+    const ay = fy + (ty - fy) * ease;
+
+    ctx.save();
+    if (flip) { ctx.translate(W, H); ctx.scale(-1, -1); }
+    ctx.globalAlpha = 0.2;
+    ctx.beginPath(); ctx.arc(ax + 2, ay + 3, CR, 0, Math.PI * 2);
+    ctx.fillStyle = '#000'; ctx.fill();
+    ctx.globalAlpha = 1;
+    drawChecker(ctx, ax, ay, anim.color, false, CR);
+    ctx.restore();
+  }, [state, flip, geo]);
+
+  // ── Composite draw — blit cached static layer + moving piece while animating ─
+  const draw = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const g = geo;
+    if (animInfoRef.current) {
+      const off = offscreenRef.current;
+      if (off && off.width === g.W && off.height === g.H) {
+        ctx.clearRect(0, 0, g.W, g.H);
+        ctx.drawImage(off, 0, 0);
+      } else {
+        drawStatic(ctx, g);
+      }
+      drawMoving(ctx, g);
+    } else {
+      drawStatic(ctx, g);
+    }
+  }, [drawStatic, drawMoving, geo]);
+
+  // ── Detect a move and animate it. rAF drives the canvas directly so there is
+  //    no React re-render per frame (the previous cause of mobile jank). ───────
+  useEffect(() => {
+    const prev = prevStateRef.current;
+    prevStateRef.current = state;
+    if (!prev || !boardChanged(prev, state)) return;
+
+    const move = detectMove(prev, state);
+    if (!move) return;
+
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    animInfoRef.current = { ...move, displayState: prev };
+    animProgressRef.current = 0;
+
+    // Cache the static layer once for the whole animation → per-frame blit only.
+    const g = geo;
+    let off = offscreenRef.current;
+    if (!off) { off = document.createElement('canvas'); offscreenRef.current = off; }
+    off.width = g.W; off.height = g.H;
+    const octx = off.getContext('2d');
+    if (octx) drawStatic(octx, g);
+
+    const startTime = performance.now();
+    const step = (now: number) => {
+      animProgressRef.current = Math.min((now - startTime) / 280, 1);
+      drawRef.current();
+      if (animProgressRef.current < 1) {
+        rafRef.current = requestAnimationFrame(step);
+      } else {
+        animInfoRef.current = null;
+        animProgressRef.current = 0;
+        rafRef.current = null;
+        drawRef.current(); // settle on final static state
+      }
+    };
+    rafRef.current = requestAnimationFrame(step);
+  }, [state]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Keep the latest draw fn for the rAF loop, and repaint on any state/geo change.
+  useEffect(() => {
+    drawRef.current = draw;
+    draw();
+  }, [draw]);
+
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
 
   // ── Unified pointer handler (mouse + touch) ────────────────────────────────
   const handleInteraction = useCallback((clientX: number, clientY: number) => {
