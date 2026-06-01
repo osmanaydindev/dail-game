@@ -182,12 +182,14 @@ interface Props {
   selected: number | 'bar' | null;
   validMoves: Move[];
   animDice: number[] | null;
+  /** Where the player dropped the dice on the board (canvas logical px), or null. */
+  dicePos: { x: number; y: number } | null;
   onPointClick: (idx: number | 'bar' | 'off') => void;
 }
 
 interface AnimInfo extends DetectedMove { displayState: GameState; }
 
-export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDice, onPointClick }: Props) {
+export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDice, dicePos, onPointClick }: Props) {
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   // geoRef for stable access inside callbacks; geo state triggers re-render
@@ -372,36 +374,45 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   const diceRafRef  = useRef<number | null>(null);
 
   const drawDice = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
-    const { BORDER, BAR_W, POINT_W, BOARD_Y, HALF_H, DIE_S } = g;
+    const { W, H, BORDER, BAR_W, POINT_W, BOARD_Y, HALF_H, DIE_S } = g;
     const rolling = animDice != null;
     const displayDice = animDice ?? state.dice;
     if (displayDice.length === 0) return;
 
     const usedCount = rolling ? 0 : state.dice.length - state.movesLeft.length;
-    const diceY = BOARD_Y + HALF_H;
     const gap = DIE_S + 6;
-    // Landscape: settle in the centre of the right half; else over the bar.
-    const diceCenterX = g.landscape
-      ? BORDER + 6 * POINT_W + BAR_W + 3 * POINT_W
-      : barX(g);
-    const startX = diceCenterX - ((displayDice.length - 1) * gap) / 2;
 
-    // Throw-in: the dice fly toward their spot from the right while spinning,
-    // then settle in place (numbers keep tumbling until the roll resolves).
+    // Centre: where the player dropped the dice (clamped inside the board), else
+    // the default spot (right half in landscape, over the bar otherwise).
+    let cx: number, cy: number;
+    if (dicePos) {
+      const half = displayDice.length * gap / 2;
+      cx = Math.min(Math.max(dicePos.x, BORDER + half), W - BORDER - half);
+      cy = Math.min(Math.max(dicePos.y, BORDER + DIE_S), H - BORDER - DIE_S);
+    } else {
+      cx = g.landscape ? BORDER + 6 * POINT_W + BAR_W + 3 * POINT_W : barX(g);
+      cy = BOARD_Y + HALF_H;
+    }
+    const startX = cx - ((displayDice.length - 1) * gap) / 2;
+
+    // While rolling the dice spin (decaying to upright). On a tap-roll (no drag)
+    // they also fly in from the right; on a drag the finger already "threw" them.
     let offX = 0, offY = 0, spin = 0;
     if (rolling && diceAnimRef.current) {
       const elapsed = performance.now() - diceAnimRef.current.start;
-      const easeIn = 1 - Math.pow(1 - Math.min(elapsed / 380, 1), 3);
-      offX = (1 - easeIn) * (DIE_S * 3.5);   // come in from the right
-      offY = (1 - easeIn) * (-DIE_S * 1.0);  // and slightly above
-      spin = Math.max(0, 1 - elapsed / 750); // spin decays to 0 (upright)
+      if (!dicePos) {
+        const easeIn = 1 - Math.pow(1 - Math.min(elapsed / 380, 1), 3);
+        offX = (1 - easeIn) * (DIE_S * 3.5);
+        offY = (1 - easeIn) * (-DIE_S * 1.0);
+      }
+      spin = Math.max(0, 1 - elapsed / 750);
     }
 
     for (let i = 0; i < displayDice.length; i++) {
       const rot = spin * (Math.PI * 4 + i * 1.2); // 0 when settled → upright
-      drawDie(ctx, startX + i * gap + offX, diceY + offY, displayDice[i], !rolling && i < usedCount, DIE_S, rot);
+      drawDie(ctx, startX + i * gap + offX, cy + offY, displayDice[i], !rolling && i < usedCount, DIE_S, rot);
     }
-  }, [state, animDice]);
+  }, [state, animDice, dicePos]);
 
   // ── Moving piece overlay — drawn on top of the static layer each frame ─────
   const drawMoving = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {

@@ -242,7 +242,7 @@ function DragDice({
   disabled,
 }: {
   boardRef: React.RefObject<HTMLDivElement | null>;
-  onRoll: () => void;
+  onRoll: (pos?: { x: number; y: number }) => void;
   disabled: boolean;
 }) {
   const [dragging, setDragging] = useState(false);
@@ -251,12 +251,17 @@ function DragDice({
 
   const tryRoll = useCallback((clientX: number, clientY: number) => {
     setDragging(false);
-    if (!movedRef.current) { onRoll(); return; } // tap = roll
-    if (!boardRef.current) return;
-    const rect = boardRef.current.getBoundingClientRect();
-    if (clientX >= rect.left && clientX <= rect.right && clientY >= rect.top && clientY <= rect.bottom) {
-      onRoll();
+    if (!movedRef.current) { onRoll(); return; } // tap = roll at default spot
+    // Drop the dice where it landed on the board canvas (logical px).
+    const canvas = boardRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
+    if (!canvas) { onRoll(); return; }
+    const rect = canvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
+      onRoll({ x, y }); // dropped on the board → land & spin there
     }
+    // dropped off the board → no roll (cancel)
   }, [boardRef, onRoll]);
 
   const handleTouchStart = (e: React.TouchEvent) => {
@@ -375,6 +380,9 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const [showTurnNotif, setShowTurnNotif] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsSupported, setFsSupported] = useState(false);
+  // Where the player dropped the dice on the board (canvas logical px) — the dice
+  // land and spin there. null = tap-roll / opponent roll → default spot.
+  const [dicePos, setDicePos] = useState<{ x: number; y: number } | null>(null);
 
   // Keep myColorRef in sync so animation callbacks can read current color
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
@@ -414,6 +422,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
     animatingRef.current = true;
     setIsAnimating(true);
     pendingStateRef.current = finalState;
+    // Opponent's roll → ignore our last drop position, use the default spot.
+    if (finalState.turn !== myColorRef.current) setDicePos(null);
     playDiceSound();
 
     // Frame delays: fast→slow (ms between frames)
@@ -577,8 +587,9 @@ export function TavlaGame({ user }: TavlaGameProps) {
     socketRef.current?.emit('tavla:join', { code, displayName: user.displayName });
   }, [user.displayName]);
 
-  const handleRoll = useCallback(() => {
+  const handleRoll = useCallback((pos?: { x: number; y: number }) => {
     if (isAnimating) return;
+    setDicePos(pos ?? null);
     socketRef.current?.emit('tavla:roll');
   }, [isAnimating]);
 
@@ -811,6 +822,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
           selected={selected}
           validMoves={validMoves}
           animDice={animDice}
+          dicePos={dicePos}
           onPointClick={handlePointClick}
         />
       </Box>
