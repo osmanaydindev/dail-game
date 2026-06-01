@@ -30,7 +30,7 @@ const wordleStorageKey = (userId: string) => `wordle-state-${userId}`;
 
 // Türkçe Q klavye düzeni — ı (I) 1. satırda U'dan sonra, i (İ) 2. satırda Ş'den sonra.
 const KEYBOARD_ROWS = [
-  ['E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'Ğ', 'Ü'],
+  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'Ğ', 'Ü'],
   ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ş', 'İ'],
   ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Ö', 'Ç', '⌫'],
 ];
@@ -148,7 +148,7 @@ function KeyboardKey({
       h={{ base: '50px', md: '64px' }}
       minW={isAction
         ? { base: '40px', md: '58px' }
-        : { base: '28px', md: '42px' }
+        : { base: '26px', md: '36px' }
       }
       px={isAction ? { base: 0.5, md: 1 } : 0}
       fontSize={isAction
