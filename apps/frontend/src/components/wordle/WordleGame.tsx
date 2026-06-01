@@ -147,10 +147,10 @@ function KeyboardKey({
       justifyContent="center"
       h={{ base: '50px', md: '64px' }}
       minW={isAction
-        ? { base: '44px', md: '58px' }
-        : { base: '31px', md: '42px' }
+        ? { base: '40px', md: '58px' }
+        : { base: '28px', md: '42px' }
       }
-      px={isAction ? 1 : 0}
+      px={isAction ? { base: 0.5, md: 1 } : 0}
       fontSize={isAction
         ? { base: '9px', md: '11px' }
         : { base: '13px', md: 'md' }
@@ -470,7 +470,7 @@ export function WordleGame() {
       >
         <VStack gap={1.5} w="full" maxW="500px" mx="auto">
           {KEYBOARD_ROWS.map((row, ri) => (
-            <HStack key={ri} gap={1} justify="center" flexWrap="nowrap">
+            <HStack key={ri} gap={{ base: 0.5, md: 1 }} justify="center" flexWrap="nowrap">
               {row.map((key) => (
                 <KeyboardKey
                   key={key}
