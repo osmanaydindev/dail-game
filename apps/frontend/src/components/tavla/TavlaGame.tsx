@@ -264,47 +264,41 @@ function DragDice({
     // dropped off the board → no roll (cancel)
   }, [boardRef, onRoll]);
 
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (disabled) return;
-    movedRef.current = false;
-    const t = e.touches[0];
-    setPos({ x: t.clientX, y: t.clientY });
-    setDragging(true);
-  };
-  const handleTouchMove = (e: React.TouchEvent) => {
-    e.preventDefault();
-    movedRef.current = true;
-    const t = e.touches[0];
-    setPos({ x: t.clientX, y: t.clientY });
-  };
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    const t = e.changedTouches[0];
-    tryRoll(t.clientX, t.clientY);
-  };
+  // Pointer Events unify mouse + touch and, with setPointerCapture, track the
+  // drag in real time on mobile too (no passive-listener / scroll interference).
+  const downRef  = useRef(false);
+  const startRef = useRef({ x: 0, y: 0 });
 
-  const handleMouseDown = (e: React.MouseEvent) => {
+  const handlePointerDown = (e: React.PointerEvent) => {
     if (disabled) return;
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    downRef.current = true;
     movedRef.current = false;
+    startRef.current = { x: e.clientX, y: e.clientY };
     setPos({ x: e.clientX, y: e.clientY });
     setDragging(true);
   };
-
-  useEffect(() => {
-    if (!dragging) return;
-    const onMove = (e: MouseEvent) => { movedRef.current = true; setPos({ x: e.clientX, y: e.clientY }); };
-    const onUp   = (e: MouseEvent) => tryRoll(e.clientX, e.clientY);
-    window.addEventListener('mousemove', onMove);
-    window.addEventListener('mouseup', onUp);
-    return () => { window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-  }, [dragging, tryRoll]);
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!downRef.current) return;
+    if (Math.hypot(e.clientX - startRef.current.x, e.clientY - startRef.current.y) > 8) {
+      movedRef.current = true;
+    }
+    setPos({ x: e.clientX, y: e.clientY }); // dice follow the finger/cursor live
+  };
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!downRef.current) return;
+    downRef.current = false;
+    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
+    tryRoll(e.clientX, e.clientY);
+  };
 
   return (
     <>
       <Box
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onMouseDown={handleMouseDown}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
         cursor={disabled ? 'default' : 'grab'}
         userSelect="none"
         style={{ touchAction: 'none' }}
