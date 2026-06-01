@@ -152,7 +152,8 @@ function drawChecker(ctx: CanvasRenderingContext2D, x: number, y: number, color:
   ctx.stroke();
 }
 
-function drawDie(ctx: CanvasRenderingContext2D, x: number, y: number, value: number, used: boolean, S: number) {
+function drawDie(ctx: CanvasRenderingContext2D, x: number, y: number, value: number, used: boolean, S: number, rot = 0) {
+  if (rot) { ctx.save(); ctx.translate(x, y); ctx.rotate(rot); ctx.translate(-x, -y); }
   ctx.fillStyle = used ? '#3a3a3c' : '#f5f0e8';
   ctx.strokeStyle = used ? '#555' : '#bbb';
   ctx.lineWidth = 1.5;
@@ -170,6 +171,7 @@ function drawDie(ctx: CanvasRenderingContext2D, x: number, y: number, value: num
   for (const [dx, dy] of dots[value] ?? []) {
     ctx.beginPath(); ctx.arc(x + dx, y + dy, dotR, 0, Math.PI * 2); ctx.fill();
   }
+  if (rot) ctx.restore();
 }
 
 // ─── Main component ───────────────────────────────────────────────────────────
@@ -241,7 +243,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   // Static layer — the full scene WITHOUT the moving piece. Cacheable to an
   // offscreen canvas during an animation so each frame only needs a blit.
   const drawStatic = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
-    const { W, H, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S } = g;
+    const { W, H, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR } = g;
     ctx.clearRect(0, 0, W, H);
 
     const anim = animInfoRef.current;
@@ -348,22 +350,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
 
     ctx.restore();
 
-    // ── Dice — drawn after restore (always upright) ───────────────────────
-    const displayDice = animDice ?? state.dice;
-    if (displayDice.length > 0) {
-      const usedCount = animDice ? 0 : state.dice.length - state.movesLeft.length;
-      const diceY = BOARD_Y + HALF_H;
-      const gap = DIE_S + 6;
-      // Landscape: place dice in the centre of the right half of the board;
-      // portrait/desktop: keep them centred over the bar.
-      const diceCenterX = g.landscape
-        ? BORDER + 6 * POINT_W + BAR_W + 3 * POINT_W
-        : barX(g);
-      const startX = diceCenterX - ((displayDice.length - 1) * gap) / 2;
-      for (let i = 0; i < displayDice.length; i++) {
-        drawDie(ctx, startX + i * gap, diceY, displayDice[i], !animDice && i < usedCount, DIE_S);
-      }
-    }
+    // Dice are drawn by drawDice() (separately, so they can be animated on top).
 
     // ── Point labels ──────────────────────────────────────────────────────
     if (!flip) {
@@ -378,7 +365,43 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     }
     // suppress unused warning
     void POINT_H;
-  }, [state, myColor, flip, selected, validMoves, animDice, geo, dark, light, boardBg, borderColor]);
+  }, [state, myColor, flip, selected, validMoves, geo, dark, light, boardBg, borderColor]);
+
+  // ── Dice layer — drawn on top; animates a throw-in + tumble while rolling ───
+  const diceAnimRef = useRef<{ start: number } | null>(null);
+  const diceRafRef  = useRef<number | null>(null);
+
+  const drawDice = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
+    const { BORDER, BAR_W, POINT_W, BOARD_Y, HALF_H, DIE_S } = g;
+    const rolling = animDice != null;
+    const displayDice = animDice ?? state.dice;
+    if (displayDice.length === 0) return;
+
+    const usedCount = rolling ? 0 : state.dice.length - state.movesLeft.length;
+    const diceY = BOARD_Y + HALF_H;
+    const gap = DIE_S + 6;
+    // Landscape: settle in the centre of the right half; else over the bar.
+    const diceCenterX = g.landscape
+      ? BORDER + 6 * POINT_W + BAR_W + 3 * POINT_W
+      : barX(g);
+    const startX = diceCenterX - ((displayDice.length - 1) * gap) / 2;
+
+    // Throw-in: the dice fly toward their spot from the right while spinning,
+    // then settle in place (numbers keep tumbling until the roll resolves).
+    let offX = 0, offY = 0, spin = 0;
+    if (rolling && diceAnimRef.current) {
+      const elapsed = performance.now() - diceAnimRef.current.start;
+      const easeIn = 1 - Math.pow(1 - Math.min(elapsed / 380, 1), 3);
+      offX = (1 - easeIn) * (DIE_S * 3.5);   // come in from the right
+      offY = (1 - easeIn) * (-DIE_S * 1.0);  // and slightly above
+      spin = Math.max(0, 1 - elapsed / 750); // spin decays to 0 (upright)
+    }
+
+    for (let i = 0; i < displayDice.length; i++) {
+      const rot = spin * (Math.PI * 4 + i * 1.2); // 0 when settled → upright
+      drawDie(ctx, startX + i * gap + offX, diceY + offY, displayDice[i], !rolling && i < usedCount, DIE_S, rot);
+    }
+  }, [state, animDice]);
 
   // ── Moving piece overlay — drawn on top of the static layer each frame ─────
   const drawMoving = useCallback((ctx: CanvasRenderingContext2D, g: Geo) => {
@@ -435,10 +458,9 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     const g = geo;
     const pw = Math.round(g.W * g.DPR);
     const ph = Math.round(g.H * g.DPR);
-    if (animInfoRef.current) {
+    const blitOrStatic = () => {
       const off = offscreenRef.current;
       if (off && off.width === pw && off.height === ph) {
-        // Blit cached static layer 1:1 in device pixels, then draw the piece.
         ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, pw, ph);
         ctx.drawImage(off, 0, 0);
@@ -446,13 +468,24 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
         ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
         drawStatic(ctx, g);
       }
+    };
+    if (animInfoRef.current) {
+      // Piece move: cached board + moving piece + (static) dice on top.
+      blitOrStatic();
       ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
       drawMoving(ctx, g);
+      drawDice(ctx, g);
+    } else if (diceAnimRef.current) {
+      // Dice roll: cached board (no dice) + animated dice.
+      blitOrStatic();
+      ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
+      drawDice(ctx, g);
     } else {
       ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
       drawStatic(ctx, g);
+      drawDice(ctx, g);
     }
-  }, [drawStatic, drawMoving, geo]);
+  }, [drawStatic, drawMoving, drawDice, geo]);
 
   // ── Detect a move and animate it. rAF drives the canvas directly so there is
   //    no React re-render per frame (the previous cause of mobile jank). ───────
@@ -499,7 +532,36 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     draw();
   }, [draw]);
 
-  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current); }, []);
+  // ── Dice roll animation — throw-in + tumble, driven directly by rAF ────────
+  useEffect(() => {
+    const rolling = animDice != null;
+    if (rolling && diceAnimRef.current == null) {
+      diceAnimRef.current = { start: performance.now() };
+      // Cache the board WITHOUT dice so each frame is just a blit + dice draw.
+      const g = geo;
+      let off = offscreenRef.current;
+      if (!off) { off = document.createElement('canvas'); offscreenRef.current = off; }
+      off.width = Math.round(g.W * g.DPR);
+      off.height = Math.round(g.H * g.DPR);
+      const octx = off.getContext('2d');
+      if (octx) { octx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0); drawStatic(octx, g); }
+      const loop = () => {
+        drawRef.current();
+        if (diceAnimRef.current) diceRafRef.current = requestAnimationFrame(loop);
+      };
+      diceRafRef.current = requestAnimationFrame(loop);
+    } else if (!rolling && diceAnimRef.current != null) {
+      diceAnimRef.current = null;
+      if (diceRafRef.current != null) cancelAnimationFrame(diceRafRef.current);
+      diceRafRef.current = null;
+      drawRef.current(); // settle on the final dice
+    }
+  }, [animDice]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => {
+    if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
+    if (diceRafRef.current !== null) cancelAnimationFrame(diceRafRef.current);
+  }, []);
 
   // ── Unified pointer handler (mouse + touch) ────────────────────────────────
   const handleInteraction = useCallback((clientX: number, clientY: number) => {

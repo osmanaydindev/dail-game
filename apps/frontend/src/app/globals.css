@@ -126,10 +126,14 @@
     z-index: 5;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   }
+  /* Buttons + dice-roll control live in the right margin, never over the board. */
   .tavla-actions {
-    position: absolute; bottom: 6px; left: 50%;
-    transform: translateX(-50%);
-    z-index: 5;
+    position: absolute; right: 6px; top: 50%;
+    transform: translateY(-50%);
+    flex-direction: column !important;
+    align-items: flex-end !important;
+    gap: 10px !important;
+    z-index: 6;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   }
 }
