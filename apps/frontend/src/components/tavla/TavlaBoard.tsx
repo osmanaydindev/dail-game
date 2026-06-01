@@ -3,17 +3,32 @@
 import { useRef, useEffect, useState, useCallback } from 'react';
 import type { GameState, Move, Color } from './types';
 
-// ─── Responsive geometry (all derived from measured container width) ──────────
+// ─── Responsive geometry ───────────────────────────────────────────────────
+// W/H are CSS (logical) pixels. DPR is the device pixel ratio used to render the
+// canvas backing store at native resolution (crisp on retina/high-density phones).
+const BOARD_ASPECT = 720 / 500; // width : height
+
 interface Geo {
-  W: number; H: number;
+  W: number; H: number; DPR: number;
   BORDER: number; BAR_W: number; BOARD_W: number; POINT_W: number;
   BOARD_Y: number; BOARD_H: number; HALF_H: number; POINT_H: number;
   CR: number; DIE_S: number;
 }
 
-function makeGeo(containerW: number): Geo {
-  const W = Math.min(Math.max(containerW, 280), 720);
-  const H = Math.round(W * 500 / 720);
+// Fit the board inside the available width AND height while keeping its aspect
+// ratio — in landscape the height is the limiting dimension, in portrait the width.
+function makeGeo(maxW: number, maxH?: number): Geo {
+  const DPR = typeof window !== 'undefined' ? Math.min(Math.max(window.devicePixelRatio || 1, 1), 3) : 1;
+
+  let W = Math.min(Math.max(maxW, 280), 760);
+  let H = W / BOARD_ASPECT;
+  if (maxH && maxH > 140 && H > maxH) {
+    H = maxH;
+    W = H * BOARD_ASPECT;
+  }
+  W = Math.round(W);
+  H = Math.round(H);
+
   const BORDER   = Math.max(10, Math.round(W * 0.025));
   const BAR_W    = Math.max(28, Math.round(W * 0.067));
   const BOARD_W  = W - 2 * BORDER;
@@ -24,7 +39,7 @@ function makeGeo(containerW: number): Geo {
   const POINT_H  = HALF_H - Math.max(6, Math.round(HALF_H * 0.055));
   const CR       = Math.max(6, Math.min(Math.floor(POINT_W / 2) - 1, 22));
   const DIE_S    = Math.max(20, Math.min(34, Math.round(CR * 1.55)));
-  return { W, H, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S };
+  return { W, H, DPR, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S };
 }
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
@@ -177,21 +192,34 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
 
   const dark = '#1a3d2b', light = '#c8a96e', boardBg = '#2d5a3e', borderColor = '#8b6914';
 
-  // ── Responsive sizing via ResizeObserver ───────────────────────────────────
+  // ── Responsive sizing — fit to both available width and viewport height ─────
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
+    // Space below the board reserved for the dice/action buttons row.
+    const RESERVE_BOTTOM = 88;
     const update = () => {
       const w = el.clientWidth;
       if (w < 10) return;
-      const g = makeGeo(w);
+      const top = el.getBoundingClientRect().top;
+      const availH = (typeof window !== 'undefined' ? window.innerHeight : 0) - top - RESERVE_BOTTOM;
+      const g = makeGeo(w, availH);
+      const cur = geoRef.current;
+      // Skip no-op updates to avoid a ResizeObserver feedback loop.
+      if (cur.W === g.W && cur.H === g.H && cur.DPR === g.DPR) return;
       geoRef.current = g;
       setGeo(g);
     };
     update();
     const ro = new ResizeObserver(update);
     ro.observe(el);
-    return () => ro.disconnect();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
   }, []);
 
   // ── Internal move animation (rAF-driven, no per-frame React state) ─────────
@@ -392,16 +420,23 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     const g = geo;
+    const pw = Math.round(g.W * g.DPR);
+    const ph = Math.round(g.H * g.DPR);
     if (animInfoRef.current) {
       const off = offscreenRef.current;
-      if (off && off.width === g.W && off.height === g.H) {
-        ctx.clearRect(0, 0, g.W, g.H);
+      if (off && off.width === pw && off.height === ph) {
+        // Blit cached static layer 1:1 in device pixels, then draw the piece.
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
+        ctx.clearRect(0, 0, pw, ph);
         ctx.drawImage(off, 0, 0);
       } else {
+        ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
         drawStatic(ctx, g);
       }
+      ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
       drawMoving(ctx, g);
     } else {
+      ctx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0);
       drawStatic(ctx, g);
     }
   }, [drawStatic, drawMoving, geo]);
@@ -424,9 +459,10 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     const g = geo;
     let off = offscreenRef.current;
     if (!off) { off = document.createElement('canvas'); offscreenRef.current = off; }
-    off.width = g.W; off.height = g.H;
+    off.width = Math.round(g.W * g.DPR);
+    off.height = Math.round(g.H * g.DPR);
     const octx = off.getContext('2d');
-    if (octx) drawStatic(octx, g);
+    if (octx) { octx.setTransform(g.DPR, 0, 0, g.DPR, 0, 0); drawStatic(octx, g); }
 
     const startTime = performance.now();
     const step = (now: number) => {
@@ -477,19 +513,22 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     if (t) handleInteraction(t.clientX, t.clientY);
   }, [handleInteraction]);
 
-  const { W, H } = geo;
+  const { W, H, DPR } = geo;
 
   return (
     <div ref={wrapperRef} style={{ width: '100%' }}>
       <canvas
         ref={canvasRef}
-        width={W}
-        height={H}
+        width={Math.round(W * DPR)}
+        height={Math.round(H * DPR)}
         onClick={handleClick}
         onTouchEnd={handleTouchEnd}
         style={{
           display: 'block',
-          width: '100%',
+          // CSS (logical) size — backing store is DPR× larger for crispness.
+          width: `${W}px`,
+          height: `${H}px`,
+          margin: '0 auto',
           cursor: 'pointer',
           // Prevent scroll-interference on touch; lets game intercept all touch events
           touchAction: 'none',
