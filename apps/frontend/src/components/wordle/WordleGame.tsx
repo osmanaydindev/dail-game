@@ -28,9 +28,10 @@ const MAX_GUESSES = 6;
 const WORD_LENGTH  = 5;
 const wordleStorageKey = (userId: string) => `wordle-state-${userId}`;
 
+// Türkçe Q klavye düzeni — ı (I) 1. satırda U'dan sonra, i (İ) 2. satırda Ş'den sonra.
 const KEYBOARD_ROWS = [
-  ['E', 'R', 'T', 'Y', 'U', 'İ', 'O', 'P', 'Ğ', 'Ü'],
-  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ş', 'I'],
+  ['E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'Ğ', 'Ü'],
+  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ş', 'İ'],
   ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Ö', 'Ç', '⌫'],
 ];
 
@@ -450,9 +451,24 @@ export function WordleGame() {
         </Box>
       )}
 
-      {/* Keyboard */}
-      <Box w="full" maxW="500px" pt={2}>
-        <VStack gap={1.5}>
+      {/* Sabit klavye için boşluk — kareler klavyenin altında kalmasın */}
+      <Box h={{ base: '170px', md: '220px' }} flexShrink={0} aria-hidden="true" />
+
+      {/* Keyboard — ekranın altına sabit */}
+      <Box
+        position="fixed"
+        bottom={0}
+        left={0}
+        right={0}
+        zIndex={1000}
+        bg="surface"
+        borderTopWidth="1px"
+        borderColor="border.subtle"
+        pt={2}
+        pb={{ base: 3, md: 4 }}
+        px={2}
+      >
+        <VStack gap={1.5} w="full" maxW="500px" mx="auto">
           {KEYBOARD_ROWS.map((row, ri) => (
             <HStack key={ri} gap={1} justify="center" flexWrap="nowrap">
               {row.map((key) => (

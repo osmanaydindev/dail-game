@@ -26,10 +26,9 @@ export default function TavlaPage() {
   }
 
   return (
-    <AppShell>
-      <Box maxW="780px" mx="auto" px={2} py={4}>
-        <TavlaGame user={{ _id: user._id, displayName: user.displayName }} />
-      </Box>
+    // noPadding: tahta tam genişlikte olsun; TavlaGame kendi padding'ini yönetir
+    <AppShell noPadding>
+      <TavlaGame user={{ _id: user._id, displayName: user.displayName }} />
     </AppShell>
   );
 }

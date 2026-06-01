@@ -4,6 +4,28 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, VStack, HStack, Text, Button, Input, Alert, Spinner,
 } from '@chakra-ui/react';
+
+// ── Portrait mobile detection ─────────────────────────────────────────────────
+function usePortraitMobile() {
+  const [isPortrait, setIsPortrait] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      setIsPortrait(
+        typeof window !== 'undefined' &&
+        window.innerWidth < 600 &&
+        window.innerHeight > window.innerWidth,
+      );
+    };
+    check();
+    window.addEventListener('resize', check);
+    window.addEventListener('orientationchange', check);
+    return () => {
+      window.removeEventListener('resize', check);
+      window.removeEventListener('orientationchange', check);
+    };
+  }, []);
+  return isPortrait;
+}
 import { TavlaBoard } from './TavlaBoard';
 import type { GameState, Move, Color, PlayerInfo } from './types';
 import { createTavlaSocket } from '@/lib/socket';
@@ -156,7 +178,7 @@ function Lobby({
   const [code, setCode] = useState('');
 
   return (
-    <VStack gap={6} maxW="360px" mx="auto" pt={8}>
+    <VStack gap={6} maxW="360px" mx="auto" pt={8} px={4}>
       <Box textAlign="center">
         <Text fontSize="2xl" fontWeight="800" mb={1}>Tavla</Text>
         <Text fontSize="sm" color="text.muted">Oda oluştur veya oda kodunu girerek katıl</Text>
@@ -322,6 +344,10 @@ interface TavlaGameProps {
 const STORAGE_KEY = 'tavla-room';
 
 export function TavlaGame({ user }: TavlaGameProps) {
+  const isPortraitMobile = usePortraitMobile();
+  // "Yine de oyna" tıklandığında overlay'i gizle; aynı oturumda tekrar gösterme
+  const [portraitDismissed, setPortraitDismissed] = useState(false);
+
   const socketRef = useRef<Socket | null>(null);
   const prevPhaseRef = useRef<string | null>(null);
   const animatingRef = useRef(false);
@@ -622,8 +648,64 @@ export function TavlaGame({ user }: TavlaGameProps) {
     return gameState.movesLeft.length > 0 ? `${gameState.movesLeft.length} hamle hakkın var` : '';
   };
 
+  // Yatay mod overlay'i: oyun sırasında portrait mobilde göster
+  const showLandscapeOverlay = isPortraitMobile && !portraitDismissed;
+
   return (
     <Box position="relative" w="full">
+    {/* Portrait mobile landscape hint overlay */}
+    {showLandscapeOverlay && (
+      <Box
+        position="fixed"
+        inset={0}
+        zIndex={300}
+        bg="rgba(0,0,0,0.93)"
+        display="flex"
+        flexDir="column"
+        alignItems="center"
+        justifyContent="center"
+        gap={5}
+        px={6}
+      >
+        {/* Animated rotation icon */}
+        <Text
+          fontSize="6xl"
+          style={{
+            display: 'inline-block',
+            animation: 'tavlaRotateHint 1.6s ease-in-out infinite',
+          }}
+        >
+          📱
+        </Text>
+        <style>{`
+          @keyframes tavlaRotateHint {
+            0%   { transform: rotate(0deg); }
+            40%  { transform: rotate(-90deg); }
+            60%  { transform: rotate(-90deg); }
+            100% { transform: rotate(0deg); }
+          }
+        `}</style>
+        <Box textAlign="center">
+          <Text fontSize="xl" fontWeight="800" color="white" mb={1}>
+            Telefonu Yatay Çevir
+          </Text>
+          <Text fontSize="sm" color="gray.400" maxW="260px" mx="auto">
+            Tavla tahtası yatay ekran için tasarlanmıştır.
+            En iyi oyun deneyimi için cihazını yatır.
+          </Text>
+        </Box>
+        <Button
+          size="sm"
+          variant="ghost"
+          color="gray.500"
+          mt={2}
+          onClick={() => setPortraitDismissed(true)}
+        >
+          Yine de oyna (küçük ekranda)
+        </Button>
+      </Box>
+    )}
+
     {/* Turn notification */}
     <Box
       position="fixed"
@@ -649,14 +731,19 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
     <VStack gap={3} align="center" w="full">
       {error && (
-        <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full">
+        <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
           <Alert.Indicator />
           <Alert.Title fontSize="sm">{error}</Alert.Title>
         </Alert.Root>
       )}
 
-      {/* Player info bar */}
-      <HStack justify="space-between" w="full" maxW={{ md: '720px' }} px={1}>
+      {/* Player info bar — yatay padding ile noPadding AppShell'i dengele */}
+      <HStack
+        justify="space-between"
+        w="full"
+        maxW={{ base: '100%', md: '720px' }}
+        px={{ base: 3, md: 2 }}
+      >
         <HStack gap={2}>
           <Box w="14px" h="14px" borderRadius="full" bg={myColor === 'white' ? '#e8e0d0' : '#2a1f1f'} borderWidth="1px" borderColor="border.subtle" />
           <Text fontSize="sm" fontWeight="700">{myInfo?.displayName ?? 'Sen'}</Text>
@@ -672,16 +759,16 @@ export function TavlaGame({ user }: TavlaGameProps) {
         </HStack>
       </HStack>
 
-      {/* Board */}
+      {/* Board — tam viewport genişliği, köşe yuvarlama sadece desktop'ta */}
       <Box
         ref={boardRef}
         w="full"
-        maxW={{ md: '720px' }}
+        maxW={{ base: '100vw', md: '720px' }}
         borderRadius={{ base: 'none', md: 'xl' }}
         overflow="hidden"
-        borderWidth="2px"
+        borderWidth={{ base: '0', md: '2px' }}
         borderColor="border.subtle"
-        boxShadow="0 8px 32px rgba(0,0,0,0.2)"
+        boxShadow={{ base: 'none', md: '0 8px 32px rgba(0,0,0,0.2)' }}
       >
         <TavlaBoard
           state={gameState}
