@@ -196,18 +196,19 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   useEffect(() => {
     const el = wrapperRef.current;
     if (!el) return;
-    // Landscape phone: header is hidden and the board must fit the viewport height.
-    // Reserve a fixed band for the player bar (top) + dice/action buttons (bottom).
-    // Using a constant (not getBoundingClientRect) keeps the size independent of
-    // scroll/pan position, so the board never resizes while the user pans around.
-    const RESERVE_VERTICAL = 124;
+    // Landscape phone: the header is hidden and a CSS flex layout sizes this
+    // wrapper to exactly the free space (100dvh minus player bar + buttons). We
+    // read that real height via clientHeight — robust against the iOS quirk where
+    // window.innerHeight is stale right after an orientation change. Portrait /
+    // desktop are width-driven (no height constraint).
     const isLandscapePhone = () =>
       typeof window !== 'undefined' &&
       window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
     const update = () => {
       const w = el.clientWidth;
       if (w < 10) return;
-      const availH = isLandscapePhone() ? window.innerHeight - RESERVE_VERTICAL : undefined;
+      const h = el.clientHeight;
+      const availH = isLandscapePhone() && h > 80 ? h : undefined;
       const g = makeGeo(w, availH);
       const cur = geoRef.current;
       // Skip no-op updates to avoid a ResizeObserver feedback loop.
@@ -521,7 +522,16 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   const { W, H, DPR } = geo;
 
   return (
-    <div ref={wrapperRef} style={{ width: '100%' }}>
+    <div
+      ref={wrapperRef}
+      style={{
+        width: '100%',
+        height: '100%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
       <canvas
         ref={canvasRef}
         width={Math.round(W * DPR)}
@@ -533,7 +543,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
           // CSS (logical) size — backing store is DPR× larger for crispness.
           width: `${W}px`,
           height: `${H}px`,
-          margin: '0 auto',
+          flexShrink: 0,
           cursor: 'pointer',
           // Prevent scroll-interference on touch; lets game intercept all touch events
           touchAction: 'none',

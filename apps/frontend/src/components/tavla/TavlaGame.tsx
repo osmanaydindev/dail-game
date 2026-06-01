@@ -684,7 +684,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const showLandscapeOverlay = isPortraitMobile && !portraitDismissed;
 
   return (
-    <Box ref={containerRef} position="relative" w="full" bg="surface">
+    <Box ref={containerRef} className="tavla-container" position="relative" w="full" bg="surface">
     {/* Portrait mobile landscape hint overlay */}
     {showLandscapeOverlay && (
       <Box
@@ -761,7 +761,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       Sıra Sende! 🎲
     </Box>
 
-    <VStack gap={3} align="center" w="full">
+    <VStack className="tavla-stack" gap={3} align="center" w="full">
       {error && (
         <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
           <Alert.Indicator />
@@ -794,6 +794,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       {/* Board — tam viewport genişliği, köşe yuvarlama sadece desktop'ta */}
       <Box
         ref={boardRef}
+        className="tavla-board-wrap"
         w="full"
         maxW={{ base: '100vw', md: '720px' }}
         borderRadius={{ base: 'none', md: 'xl' }}

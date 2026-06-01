@@ -82,8 +82,10 @@
 }
 
 /* ─── Tavla: hide the header on landscape phones to free vertical space ───── */
-/* Also lock the page to the viewport height (no scroll) so the board cannot be
-   panned/zoomed around — it stays centered and fully visible. */
+/* Lock the play area to the viewport height (100dvh, no scroll) and lay it out
+   as a flex column so the board takes the remaining space. The board then
+   measures that real space via ResizeObserver — robust against the iOS quirk
+   where window.innerHeight is stale right after an orientation change. */
 @media (orientation: landscape) and (max-height: 500px) {
   body:has(.ao-immersive-landscape) { overflow: hidden; }
   .ao-immersive-landscape > nav { display: none; }
@@ -98,8 +100,10 @@
     overflow: hidden;
     display: flex;
     flex-direction: column;
-    justify-content: center;
   }
+  .tavla-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+  .tavla-stack     { flex: 1; min-height: 0; width: 100%; }
+  .tavla-board-wrap { flex: 1; min-height: 0; }
 }
 
 /* ─── Respect reduced-motion preference ──────────────────────────────────── */
