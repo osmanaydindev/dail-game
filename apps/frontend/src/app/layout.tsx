@@ -13,6 +13,12 @@ export const metadata: Metadata = {
     shortcut: '/favicon.ico',
   },
   manifest: '/site.webmanifest',
+  // iOS: launch chrome-less (no URL bar) when added to the home screen.
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: 'black-translucent',
+    title: 'Aydınlar Oynuyor',
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
