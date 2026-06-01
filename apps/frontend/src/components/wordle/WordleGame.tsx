@@ -145,15 +145,15 @@ function KeyboardKey({
       display="flex"
       alignItems="center"
       justifyContent="center"
-      h={{ base: '42px', md: '58px' }}
+      h={{ base: '50px', md: '64px' }}
       minW={isAction
-        ? { base: '38px', md: '52px' }
-        : { base: '27px', md: '36px' }
+        ? { base: '44px', md: '58px' }
+        : { base: '31px', md: '42px' }
       }
       px={isAction ? 1 : 0}
       fontSize={isAction
-        ? { base: '8px', md: '10px' }
-        : { base: '11px', md: 'sm' }
+        ? { base: '9px', md: '11px' }
+        : { base: '13px', md: 'md' }
       }
       fontWeight="700"
       borderRadius="6px"
@@ -452,7 +452,7 @@ export function WordleGame() {
       )}
 
       {/* Sabit klavye için boşluk — kareler klavyenin altında kalmasın */}
-      <Box h={{ base: '170px', md: '220px' }} flexShrink={0} aria-hidden="true" />
+      <Box h={{ base: '200px', md: '250px' }} flexShrink={0} aria-hidden="true" />
 
       {/* Keyboard — ekranın altına sabit */}
       <Box
