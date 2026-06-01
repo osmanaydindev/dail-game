@@ -27,7 +27,8 @@ export default function TavlaPage() {
 
   return (
     // noPadding: tahta tam genişlikte olsun; TavlaGame kendi padding'ini yönetir
-    <AppShell noPadding>
+    // hideNavOnLandscape: yatay telefonda header gizlensin, tahtaya dikey alan kalsın
+    <AppShell noPadding hideNavOnLandscape>
       <TavlaGame user={{ _id: user._id, displayName: user.displayName }} />
     </AppShell>
   );

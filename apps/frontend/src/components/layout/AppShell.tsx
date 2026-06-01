@@ -8,15 +8,18 @@ import { Navbar } from './Navbar';
 export function AppShell({
   children,
   noPadding,
+  hideNavOnLandscape,
 }: {
   children: React.ReactNode;
   /** Yatay padding'i kaldırır (Tavla gibi tam genişlik isteyen sayfalar için) */
   noPadding?: boolean;
+  /** Telefon yatay modda header'ı gizler (Tavla — dikey alan kazanmak için) */
+  hideNavOnLandscape?: boolean;
 }) {
   const pathname = usePathname();
 
   return (
-    <Box minH="100vh" bg="surface">
+    <Box minH="100vh" bg="surface" className={hideNavOnLandscape ? 'ao-immersive-landscape' : undefined}>
       <Navbar />
       <AnimatePresence mode="popLayout">
         <motion.main

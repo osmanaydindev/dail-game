@@ -81,6 +81,12 @@
   .ao-gradient-text { animation: none; }
 }
 
+/* ─── Tavla: hide the header on landscape phones to free vertical space ───── */
+@media (orientation: landscape) and (max-height: 500px) {
+  .ao-immersive-landscape > nav { display: none; }
+  .ao-immersive-landscape > main { padding-top: 0 !important; }
+}
+
 /* ─── Respect reduced-motion preference ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   .ao-float,
