@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Box, VStack, HStack, Text, Button, Input, Alert, Spinner,
 } from '@chakra-ui/react';
@@ -315,7 +316,9 @@ function DragDice({
           </Text>
         )}
       </Box>
-      {dragging && (
+      {/* Portal to <body> so position:fixed is viewport-relative even when an
+          ancestor (e.g. the landscape controls column) has a CSS transform. */}
+      {dragging && typeof document !== 'undefined' && createPortal(
         <Box
           position="fixed"
           style={{
@@ -323,13 +326,14 @@ function DragDice({
             top: pos.y - 36,
             transform: 'scale(1.35)',
             pointerEvents: 'none',
-            zIndex: 1000,
+            zIndex: 2000,
             opacity: 0.85,
             fontSize: '2.4rem',
           }}
         >
           🎲🎲
-        </Box>
+        </Box>,
+        document.body,
       )}
     </>
   );
