@@ -9,7 +9,7 @@ import type { GameState, Move, Color } from './types';
 const BOARD_ASPECT = 720 / 500; // width : height
 
 interface Geo {
-  W: number; H: number; DPR: number;
+  W: number; H: number; DPR: number; landscape: boolean;
   BORDER: number; BAR_W: number; BOARD_W: number; POINT_W: number;
   BOARD_Y: number; BOARD_H: number; HALF_H: number; POINT_H: number;
   CR: number; DIE_S: number;
@@ -19,6 +19,8 @@ interface Geo {
 // ratio — in landscape the height is the limiting dimension, in portrait the width.
 function makeGeo(maxW: number, maxH?: number): Geo {
   const DPR = typeof window !== 'undefined' ? Math.min(Math.max(window.devicePixelRatio || 1, 1), 3) : 1;
+  const landscape = typeof window !== 'undefined' &&
+    window.matchMedia('(orientation: landscape) and (max-height: 500px)').matches;
 
   let W = Math.min(Math.max(maxW, 280), 760);
   let H = W / BOARD_ASPECT;
@@ -39,7 +41,7 @@ function makeGeo(maxW: number, maxH?: number): Geo {
   const POINT_H  = HALF_H - Math.max(6, Math.round(HALF_H * 0.055));
   const CR       = Math.max(6, Math.min(Math.floor(POINT_W / 2) - 1, 22));
   const DIE_S    = Math.max(20, Math.min(34, Math.round(CR * 1.55)));
-  return { W, H, DPR, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S };
+  return { W, H, DPR, landscape, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S };
 }
 
 // ─── Geometry helpers ─────────────────────────────────────────────────────────
@@ -212,7 +214,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
       const g = makeGeo(w, availH);
       const cur = geoRef.current;
       // Skip no-op updates to avoid a ResizeObserver feedback loop.
-      if (cur.W === g.W && cur.H === g.H && cur.DPR === g.DPR) return;
+      if (cur.W === g.W && cur.H === g.H && cur.DPR === g.DPR && cur.landscape === g.landscape) return;
       geoRef.current = g;
       setGeo(g);
     };
@@ -352,7 +354,12 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
       const usedCount = animDice ? 0 : state.dice.length - state.movesLeft.length;
       const diceY = BOARD_Y + HALF_H;
       const gap = DIE_S + 6;
-      const startX = barX(g) - ((displayDice.length - 1) * gap) / 2;
+      // Landscape: place dice in the centre of the right half of the board;
+      // portrait/desktop: keep them centred over the bar.
+      const diceCenterX = g.landscape
+        ? BORDER + 6 * POINT_W + BAR_W + 3 * POINT_W
+        : barX(g);
+      const startX = diceCenterX - ((displayDice.length - 1) * gap) / 2;
       for (let i = 0; i < displayDice.length; i++) {
         drawDie(ctx, startX + i * gap, diceY, displayDice[i], !animDice && i < usedCount, DIE_S);
       }
