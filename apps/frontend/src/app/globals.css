@@ -102,8 +102,36 @@
     flex-direction: column;
   }
   .tavla-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .tavla-stack     { flex: 1; min-height: 0; width: 100%; }
-  .tavla-board-wrap { flex: 1; min-height: 0; }
+  .tavla-stack {
+    flex: 1; min-height: 0; width: 100%;
+    position: relative;        /* anchor for the floating UI below */
+    gap: 0 !important;
+  }
+  /* Board fills the whole play area and stays dead-centred (no shrinking). */
+  .tavla-board-wrap {
+    flex: 1; min-height: 0;
+    max-width: none !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  /* Player names + action buttons float so they never steal space from the board.
+     The board is height-limited, so its left/right margins hold the names. */
+  .tavla-playerbar {
+    position: absolute; top: 4px; left: 0; right: 0;
+    width: auto !important; max-width: none !important;
+    z-index: 5;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  }
+  .tavla-actions {
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
+    z-index: 5;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  }
 }
 
 /* ─── Respect reduced-motion preference ──────────────────────────────────── */

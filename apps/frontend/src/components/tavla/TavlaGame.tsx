@@ -771,6 +771,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
       {/* Player info bar — yatay padding ile noPadding AppShell'i dengele */}
       <HStack
+        className="tavla-playerbar"
         justify="space-between"
         w="full"
         maxW={{ base: '100%', md: '720px' }}
@@ -815,7 +816,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       </Box>
 
       {/* Action buttons */}
-      <HStack gap={4} align="center">
+      <HStack className="tavla-actions" gap={4} align="center">
         {isMyTurn && gameState.phase === 'rolling' && (
           <DragDice boardRef={boardRef} onRoll={handleRoll} disabled={isAnimating} />
         )}
