@@ -98,7 +98,9 @@
     "subtitle": "Günlük sonuçlarını bu oyunlar için gir ve sıralamaya katıl.",
     "playNow": "Oyna →",
     "scoring": "PUANLAMA",
+    "mode": "MOD",
     "daily": "Günlük",
+    "multiplayer": "Çok Oyunculu",
     "wordle": {
       "description": "6 denemede 5 harfli gizli kelimeyi bul. Her gün yeni bir kelime.",
       "scoring": "Az deneme = yüksek puan. TBK (Tahminde Bulunamadım) = 0 puan."
@@ -106,6 +108,10 @@
     "parolla": {
       "description": "Türkçe kelime-çağrışım oyunu. Kelimeleri kategorileriyle eşleştir.",
       "scoring": "Daha fazla doğru cevap = daha yüksek puan."
+    },
+    "tavla": {
+      "description": "Klasik tavla. Arkadaşınla aynı odada gerçek zamanlı karşılıklı oyna.",
+      "mode": "Gerçek zamanlı, iki kişilik online oyun."
     }
   },
   "admin": {

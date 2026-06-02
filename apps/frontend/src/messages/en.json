@@ -98,7 +98,9 @@
     "subtitle": "Submit your daily results for these games to climb the leaderboard.",
     "playNow": "Play now →",
     "scoring": "SCORING",
+    "mode": "MODE",
     "daily": "Daily",
+    "multiplayer": "Multiplayer",
     "wordle": {
       "description": "Guess the hidden 5-letter word in 6 tries. One new word every day.",
       "scoring": "Fewer attempts = higher score. DNF = 0 points."
@@ -106,6 +108,10 @@
     "parolla": {
       "description": "The Turkish word-association game. Match words to their categories.",
       "scoring": "More correct answers = higher score."
+    },
+    "tavla": {
+      "description": "Classic backgammon. Play head-to-head with a friend in real time.",
+      "mode": "Real-time, two-player online match."
     }
   },
   "admin": {
