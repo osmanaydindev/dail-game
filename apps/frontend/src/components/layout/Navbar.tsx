@@ -33,7 +33,6 @@ export function Navbar() {
     { href: '/leaderboard' as const, label: t('leaderboard') },
     { href: '/wordle' as const, label: t('wordle') },
     { href: '/parolla' as const, label: t('parolla') },
-    { href: '/history' as const, label: t('history') },
     { href: '/games' as const, label: t('games') },
   ];
 
@@ -174,6 +173,11 @@ export function Navbar() {
                         {t('submitScore')}
                       </Box>
                     </Link>
+                    <Link href="/history" onClick={() => setProfileOpen(false)}>
+                      <Box px={4} py={2.5} fontSize="sm" _hover={{ bg: 'surface.subtle' }} cursor="pointer">
+                        {t('history')}
+                      </Box>
+                    </Link>
                     <Box h="1px" bg="border.subtle" />
                     <Box
                       px={4} py={2.5}
@@ -260,6 +264,11 @@ export function Navbar() {
                     <Link href="/entry" onClick={() => setMobileOpen(false)}>
                       <Button variant="ghost" colorPalette="gray" w="full" justifyContent="flex-start">
                         {t('submitScore')}
+                      </Button>
+                    </Link>
+                    <Link href="/history" onClick={() => setMobileOpen(false)}>
+                      <Button variant="ghost" colorPalette="gray" w="full" justifyContent="flex-start">
+                        {t('history')}
                       </Button>
                     </Link>
                     <Button
