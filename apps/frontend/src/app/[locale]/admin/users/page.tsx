@@ -18,6 +18,10 @@ import {
   Avatar,
   Text,
   Alert,
+  Dialog,
+  Field,
+  Input,
+  VStack,
 } from '@chakra-ui/react';
 import Link from 'next/link';
 import type { UserPublic } from '@dail-game/types';
@@ -30,6 +34,10 @@ export default function AdminUsersPage() {
   const [users, setUsers] = useState<UserPublic[]>([]);
   const [loading, setLoading] = useState(true);
   const [actionMsg, setActionMsg] = useState<{ type: 'success' | 'error'; msg: string } | null>(null);
+  const [resetting, setResetting] = useState<UserPublic | null>(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [savingPassword, setSavingPassword] = useState(false);
 
   useEffect(() => {
     if (isInitialized && (!user || user.role !== 'admin')) router.replace('/');
@@ -53,6 +61,31 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch {
       setActionMsg({ type: 'error', msg: t('deactivateFailed') });
+    }
+  };
+
+  const openReset = (u: UserPublic) => {
+    setResetting(u);
+    setNewPassword('');
+    setResetError(null);
+  };
+
+  const handleResetPassword = async () => {
+    if (!resetting) return;
+    if (newPassword.length < 8) {
+      setResetError(t('passwordTooShort'));
+      return;
+    }
+    setSavingPassword(true);
+    setResetError(null);
+    try {
+      await api.patch(`/admin/users/${(resetting as any)._id}/password`, { newPassword });
+      setResetting(null);
+      setActionMsg({ type: 'success', msg: t('passwordUpdated') });
+    } catch {
+      setResetError(t('passwordUpdateFailed'));
+    } finally {
+      setSavingPassword(false);
     }
   };
 
@@ -118,16 +151,26 @@ export default function AdminUsersPage() {
                     {new Date(u.createdAt).toLocaleDateString()}
                   </Table.Cell>
                   <Table.Cell>
-                    {u.isActive && u._id !== user._id && (
+                    <HStack gap={1} justify="flex-end">
                       <Button
                         size="xs"
                         variant="ghost"
-                        colorPalette="red"
-                        onClick={() => handleDeactivate(u._id)}
+                        colorPalette="brand"
+                        onClick={() => openReset(u)}
                       >
-                        {t('deactivate')}
+                        {t('resetPassword')}
                       </Button>
-                    )}
+                      {u.isActive && u._id !== user._id && (
+                        <Button
+                          size="xs"
+                          variant="ghost"
+                          colorPalette="red"
+                          onClick={() => handleDeactivate(u._id)}
+                        >
+                          {t('deactivate')}
+                        </Button>
+                      )}
+                    </HStack>
                   </Table.Cell>
                 </Table.Row>
               ))}
@@ -135,6 +178,45 @@ export default function AdminUsersPage() {
           </Table.Root>
         </Box>
       )}
+
+      {/* Reset password dialog */}
+      <Dialog.Root open={!!resetting} onOpenChange={(e) => { if (!e.open) setResetting(null); }}>
+        <Dialog.Backdrop />
+        <Dialog.Positioner>
+          <Dialog.Content borderRadius="2xl" maxW="400px">
+            <Dialog.Header>
+              <Dialog.Title>{t('resetPasswordFor', { name: resetting?.displayName ?? '' })}</Dialog.Title>
+            </Dialog.Header>
+            <Dialog.Body>
+              {resetError && (
+                <Alert.Root status="error" borderRadius="lg" mb={4}>
+                  <Alert.Indicator />
+                  <Alert.Title>{resetError}</Alert.Title>
+                </Alert.Root>
+              )}
+              <VStack gap={4} align="stretch">
+                <Field.Root>
+                  <Field.Label fontWeight="600">{t('newPassword')}</Field.Label>
+                  <Input
+                    type="password"
+                    autoComplete="new-password"
+                    placeholder={t('passwordPlaceholder')}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                  <Field.HelperText>{t('passwordHint')}</Field.HelperText>
+                </Field.Root>
+              </VStack>
+            </Dialog.Body>
+            <Dialog.Footer gap={2}>
+              <Button variant="ghost" onClick={() => setResetting(null)}>{t('cancel')}</Button>
+              <Button colorPalette="brand" loading={savingPassword} onClick={handleResetPassword}>
+                {t('save')}
+              </Button>
+            </Dialog.Footer>
+          </Dialog.Content>
+        </Dialog.Positioner>
+      </Dialog.Root>
     </AppShell>
   );
 }
