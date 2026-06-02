@@ -27,6 +27,9 @@ apps/frontend/.env.local
 *.p12
 secrets/
 
+# VPS deploy helper scripts — contain plaintext SSH credentials, NEVER commit
+vps*.py
+
 # Logs
 *.log
 npm-debug.log*
