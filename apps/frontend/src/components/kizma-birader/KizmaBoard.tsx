@@ -112,7 +112,7 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick 
               strokeWidth={0.05}
             />
             {isSafe && !isStart && (
-              <text x={c.x + 0.5} y={c.y + 0.72} fontSize={0.62} textAnchor="middle" fill="#9aa3b2">★</text>
+              <circle cx={c.x + 0.5} cy={c.y + 0.5} r={0.2} fill="none" stroke="#7c8597" strokeWidth={0.07} />
             )}
           </g>
         );
