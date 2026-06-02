@@ -60,6 +60,19 @@ export default function GamesPage() {
       infoLabel: t('mode'),
       info: t('tavla.mode'),
     },
+    {
+      slug: 'kizma-birader',
+      name: 'Kızma Birader',
+      icon: '🎯',
+      gradient: 'linear-gradient(135deg, #8b5cf6 0%, #5b2bb0 100%)',
+      description: t('kizma.description'),
+      href: '/kizma-birader',
+      external: false,
+      color: 'purple',
+      badge: t('multiplayer'),
+      infoLabel: t('mode'),
+      info: t('kizma.mode'),
+    },
   ];
 
   return (

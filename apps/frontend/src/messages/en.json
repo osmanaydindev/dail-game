@@ -112,6 +112,10 @@
     "tavla": {
       "description": "Classic backgammon. Play head-to-head with a friend in real time.",
       "mode": "Real-time, two-player online match."
+    },
+    "kizma": {
+      "description": "Classic Ludo (Kızma Birader). 3-4 players pick colors and race in real time.",
+      "mode": "Real-time, 3-4 player online game."
     }
   },
   "admin": {

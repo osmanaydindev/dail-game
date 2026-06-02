@@ -112,6 +112,10 @@
     "tavla": {
       "description": "Klasik tavla. Arkadaşınla aynı odada gerçek zamanlı karşılıklı oyna.",
       "mode": "Gerçek zamanlı, iki kişilik online oyun."
+    },
+    "kizma": {
+      "description": "Klasik Kızma Birader. 3-4 kişi aynı odada renk seçip gerçek zamanlı yarışın.",
+      "mode": "Gerçek zamanlı, 3-4 kişilik online oyun."
     }
   },
   "admin": {
