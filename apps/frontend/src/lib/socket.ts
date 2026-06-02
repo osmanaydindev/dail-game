@@ -11,3 +11,12 @@ export function createTavlaSocket(): Socket {
     transports: ['polling', 'websocket'],
   });
 }
+
+// Kızma Birader, aynı Socket.IO server'ında ayrı '/kizma' namespace'inde çalışır.
+export function createKizmaBiraderSocket(): Socket {
+  return io(`${SOCKET_URL}/kizma`, {
+    path: '/api/socket.io',
+    auth: { token: getAccessToken() },
+    transports: ['polling', 'websocket'],
+  });
+}

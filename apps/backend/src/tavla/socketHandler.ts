@@ -10,7 +10,7 @@ import type { Move } from './engine';
 
 interface JwtPayload { sub: string; role: string; }
 
-export function attachTavlaSocket(httpServer: HttpServer): void {
+export function attachTavlaSocket(httpServer: HttpServer): Server {
   const io = new Server(httpServer, {
     path: '/api/socket.io',
     cors: {
@@ -160,4 +160,6 @@ export function attachTavlaSocket(httpServer: HttpServer): void {
       }
     });
   });
+
+  return io;
 }

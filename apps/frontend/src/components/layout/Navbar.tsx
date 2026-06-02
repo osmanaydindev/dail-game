@@ -34,6 +34,7 @@ export function Navbar() {
     { href: '/wordle' as const, label: t('wordle') },
     { href: '/parolla' as const, label: t('parolla') },
     { href: '/tavla' as const, label: 'Tavla' },
+    { href: '/kizma-birader' as const, label: 'Kızma Birader' },
     { href: '/history' as const, label: t('history') },
     { href: '/games' as const, label: t('games') },
   ];
