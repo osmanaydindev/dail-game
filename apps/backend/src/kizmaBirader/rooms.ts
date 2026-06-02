@@ -17,6 +17,8 @@ export interface KizmaRoom {
   players: KizmaPlayer[];
   state: KizmaGameState | null;
   createdAt: number;
+  // Zar gösterimi sırasında (pas animasyonu) kısa süreli kilit — roll/move bloklanır.
+  locked?: boolean;
 }
 
 const rooms = new Map<string, KizmaRoom>();

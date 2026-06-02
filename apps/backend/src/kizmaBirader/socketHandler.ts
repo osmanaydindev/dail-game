@@ -138,21 +138,42 @@ export function attachKizmaBiraderSocket(io: Server): void {
     // ── Zar at ────────────────────────────────────────────────────────────────────
     socket.on('kizma:roll', () => {
       const room = getRoomBySocketId(socket.id);
-      if (!room?.state || room.state.phase !== 'rolling' || room.state.winner) return;
+      if (!room?.state || room.locked || room.state.phase !== 'rolling' || room.state.winner) return;
       const player = room.players.find((p) => p.socketId === socket.id);
       if (!player || player.color !== room.state.turn) return;
 
       const die = rollDice();
-      room.state = applyRoll(room.state, die);
-      // Zarın görünmesi için: önce zarı bildir, sonra state (FE zar animasyonu yapabilir)
       nsp.to(room.code).emit('kizma:dice', { die, by: player.color });
-      emitState(nsp, room);
+
+      const result = applyRoll(room.state, die);
+
+      if (result.phase === 'moving') {
+        // Oynanabilir hamle var → zar görünür kalır, oyuncu taşını seçer.
+        room.state = result;
+        emitState(nsp, room);
+        return;
+      }
+
+      // Hamle yok / üç-6 → tur geçecek. Önce atılan zarı göster, sonra pas et.
+      // Kilit: bu bekleme sırasında kimse zar atamaz/oynayamaz (race önleme).
+      const before = room.state;
+      // phase 'moving' + boş legalMoves: zar görünür ama "Zar At" butonu çıkmaz,
+      // taş da highlight olmaz; FE "Hamle yok" gösterir.
+      const displayState = { ...before, dice: die, phase: 'moving' as const, lastEvent: 'pass' as const };
+      room.locked = true;
+      nsp.to(room.code).emit('kizma:state', { state: displayState, legalMoves: [] });
+      setTimeout(() => {
+        const live = getRoomBySocketId(player.socketId) ?? room;
+        live.state = result;
+        live.locked = false;
+        emitState(nsp, live);
+      }, 1400);
     });
 
     // ── Hamle yap ────────────────────────────────────────────────────────────────
     socket.on('kizma:move', (move: KizmaMove) => {
       const room = getRoomBySocketId(socket.id);
-      if (!room?.state || room.state.phase !== 'moving' || room.state.winner) return;
+      if (!room?.state || room.locked || room.state.phase !== 'moving' || room.state.winner) return;
       const player = room.players.find((p) => p.socketId === socket.id);
       if (!player || player.color !== room.state.turn) return;
 

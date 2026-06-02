@@ -263,7 +263,10 @@ export function KizmaBiraderGame({ user }: Props) {
 
   const statusMsg = () => {
     if (gameState.winner) return gameState.winner === myColor ? '🏆 Kazandın!' : `${nameOf(gameState.winner)} kazandı`;
-    if (isMyTurn) return gameState.phase === 'rolling' ? 'Zarını at!' : 'Taşını seç';
+    if (isMyTurn) {
+      if (gameState.phase === 'rolling') return 'Zarını at!';
+      return legalMoves.length === 0 ? 'Hamle yok…' : 'Taşını seç';
+    }
     return `${nameOf(gameState.turn)} oynuyor...`;
   };
 
