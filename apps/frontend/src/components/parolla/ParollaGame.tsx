@@ -191,6 +191,57 @@ function InlineAnswerKey({
   );
 }
 
+// ─── Ready modal (başlamadan önce onay) ──────────────────────────────────────
+function ReadyModal({ onStart }: { onStart: () => void }) {
+  return (
+    <Box
+      position="fixed"
+      inset={0}
+      bg="rgba(0,0,0,0.7)"
+      zIndex={200}
+      display="flex"
+      alignItems="center"
+      justifyContent="center"
+      p={4}
+    >
+      <Box
+        bg="surface.card"
+        borderRadius="2xl"
+        borderWidth="1px"
+        borderColor="border.subtle"
+        w="full"
+        maxW="400px"
+        p={6}
+        textAlign="center"
+      >
+        <Text fontSize="2xl" mb={2}>⏱</Text>
+        <Text fontWeight="800" fontSize="xl" mb={2}>Hazır mısın?</Text>
+        <Text fontSize="sm" color="text.muted" mb={6}>
+          Başladığında {Math.floor(GAME_DURATION / 60)} dakikalık süre işlemeye başlar.
+          Her harf için o harfle başlayan kelimeyi yaz veya pas geç.
+        </Text>
+        <Box
+          as="button"
+          w="full"
+          py={3}
+          borderRadius="xl"
+          bg="green.600"
+          color="white"
+          fontWeight="700"
+          fontSize="sm"
+          cursor="pointer"
+          _hover={{ opacity: 0.9 }}
+          _active={{ opacity: 0.7 }}
+          onClick={onStart}
+          style={{ WebkitTapHighlightColor: 'transparent' }}
+        >
+          Başla
+        </Box>
+      </Box>
+    </Box>
+  );
+}
+
 // ─── Result modal ─────────────────────────────────────────────────────────────
 function ResultModal({
   results,
@@ -387,7 +438,7 @@ export function ParollaGame() {
   const [results,     setResults]     = useState<LetterResult[]>([]);
   const [currentIdx,  setCurrentIdx]  = useState(0);
   const [timeLeft,    setTimeLeft]    = useState(GAME_DURATION);
-  const [gameStatus,  setGameStatus]  = useState<'loading' | 'playing' | 'finished'>('loading');
+  const [gameStatus,  setGameStatus]  = useState<'loading' | 'ready' | 'playing' | 'finished'>('loading');
   const [timeExpired, setTimeExpired] = useState(false);
   const [userInput,   setUserInput]   = useState('');
   const [submitted,   setSubmitted]   = useState(false);
@@ -429,7 +480,7 @@ export function ParollaGame() {
           userAnswer:    '',
           status:        'unanswered',
         })));
-        setGameStatus('playing');
+        setGameStatus('ready');
       } catch {
         setLoadError('Sorular yüklenemedi. Bağlantınızı kontrol edin.');
       }
@@ -439,7 +490,7 @@ export function ParollaGame() {
 
   // ── Persist ───────────────────────────────────────────────────────────────
   useEffect(() => {
-    if (gameStatus === 'loading' || results.length === 0) return;
+    if (gameStatus === 'loading' || gameStatus === 'ready' || results.length === 0) return;
     const state: SavedState = { date: today, results, currentIdx, timeLeft, gameStatus, submitted };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   }, [today, results, currentIdx, timeLeft, gameStatus, submitted]);
@@ -516,6 +567,12 @@ export function ParollaGame() {
     setShowModal(true);
   }, []);
 
+  // ── Start (ready → playing) ───────────────────────────────────────────────
+  const handleStart = useCallback(() => {
+    setGameStatus('playing');
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, []);
+
   // ── Submit answer ─────────────────────────────────────────────────────────
   const handleSubmit = useCallback(() => {
     if (gameStatus !== 'playing') return;
@@ -578,6 +635,8 @@ export function ParollaGame() {
 
   return (
     <Box w="full" position="relative" minH="60vh" display="flex" flexDir="column">
+
+      {gameStatus === 'ready' && <ReadyModal onStart={handleStart} />}
 
       {showModal && (
         <ResultModal
@@ -668,9 +727,6 @@ export function ParollaGame() {
               >
                 {current.letter}
               </Box>
-              <Text fontSize="sm" color="text.muted">
-                harfiyle başlayan bir kelime yaz
-              </Text>
             </HStack>
           )}
           {inputError && (
