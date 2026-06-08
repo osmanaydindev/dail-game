@@ -260,16 +260,18 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           const cx = b.x + b.w / 2;
           const cy = b.y + b.h / 2;
           const isLow = isMyTurn && timeLeft <= 10;
+          const tokenColor = COLOR_HEX[state.turn];
           return (
-            <g key="timer-bg">
-              <rect x={cx - 0.6} y={cy - 0.42} width={1.2} height={0.84} rx={0.2}
-                fill="rgba(0,0,0,0.48)" />
+            <g key="timer-badge" style={{ pointerEvents: 'none' }}>
+              <circle cx={cx} cy={cy} r={0.78} fill="white" opacity={0.93} />
+              <circle cx={cx} cy={cy} r={0.78} fill="none"
+                stroke={isLow ? '#e53e3e' : tokenColor} strokeWidth={0.1} />
               <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-                fontSize={0.58} fontWeight="bold"
-                fill={isLow ? '#fc8181' : '#f0f0f0'}
-                style={{ pointerEvents: 'none', userSelect: 'none' }}
+                fontSize={0.6} fontWeight="bold"
+                fill={isLow ? '#e53e3e' : tokenColor}
+                style={{ userSelect: 'none' }}
               >
-                {timeLeft}s
+                {timeLeft}
               </text>
             </g>
           );
