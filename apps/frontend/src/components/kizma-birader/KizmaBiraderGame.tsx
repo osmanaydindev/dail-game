@@ -16,6 +16,7 @@ import type {
 
 const STORAGE_KEY = 'kizma-room';
 const storage = typeof window !== 'undefined' ? localStorage : null;
+const TURN_SECONDS = 30;
 
 interface ChatMsg { text: string; displayName: string; ts: number; }
 
@@ -118,6 +119,8 @@ export function KizmaBiraderGame({ user }: Props) {
   const prevStateRef = useRef<KizmaGameState | null>(null);
   const prevTurnRef = useRef<KizmaColor | null>(null);
   const myColorRef = useRef<KizmaColor | null>(null);
+  const gameStateRef = useRef<KizmaGameState | null>(null);
+  const legalMovesRef = useRef<KizmaMove[]>([]);
 
   const [screen, setScreen] = useState<Screen>('home');
   const [lobby, setLobby] = useState<LobbyPayload | null>(null);
@@ -131,6 +134,7 @@ export function KizmaBiraderGame({ user }: Props) {
   const [busy, setBusy] = useState(false);
   const [animDie, setAnimDie] = useState<number | null>(null);
   const [showTurnNotif, setShowTurnNotif] = useState(false);
+  const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
   // Sohbet
   const [messages, setMessages] = useState<ChatMsg[]>([]);
@@ -142,6 +146,8 @@ export function KizmaBiraderGame({ user }: Props) {
 
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
+  useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
+  useEffect(() => { legalMovesRef.current = legalMoves; }, [legalMoves]);
 
   // Chat açılınca okunmamış sıfırla
   useEffect(() => { if (chatOpen) setUnread(0); }, [chatOpen]);
@@ -279,6 +285,31 @@ export function KizmaBiraderGame({ user }: Props) {
     emit('kizma:message', { text });
     setChatInput('');
   }, [chatInput]);
+
+  // ── Sıra sayacı + otomatik hamle ────────────────────────────────────────────
+  const isMyTurnForTimer = gameState?.turn === myColor && !gameState?.winner;
+  useEffect(() => {
+    if (!isMyTurnForTimer || !gameState) { setTimeLeft(null); return; }
+
+    let t = TURN_SECONDS;
+    setTimeLeft(t);
+    const iv = setInterval(() => {
+      t -= 1;
+      setTimeLeft(t);
+      if (t <= 0) {
+        clearInterval(iv);
+        const s = socketRef.current;
+        const gs = gameStateRef.current;
+        if (!s || !gs) return;
+        if (gs.phase === 'rolling') {
+          s.emit('kizma:roll');
+        } else if (gs.phase === 'moving' && legalMovesRef.current.length > 0) {
+          s.emit('kizma:move', legalMovesRef.current[0]);
+        }
+      }
+    }, 1000);
+    return () => clearInterval(iv);
+  }, [isMyTurnForTimer, gameState?.turn, gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const leaveToHome = (clearStorage = false) => {
     if (clearStorage) storage?.removeItem(STORAGE_KEY);
@@ -507,6 +538,15 @@ export function KizmaBiraderGame({ user }: Props) {
               <Box w="12px" h="12px" borderRadius="full" bg={COLOR_HEX[c]} borderWidth="1px" borderColor="border.subtle" />
               <Text fontSize="xs" fontWeight={gameState.turn === c ? '800' : '500'}>{nameOf(c)}</Text>
               <Text fontSize="2xs" color="text.muted">{finishedCount(c)}/4</Text>
+              {c === gameState.turn && (
+                <Text
+                  fontSize="2xs"
+                  fontWeight="800"
+                  color={isMyTurn && timeLeft !== null && timeLeft <= 10 ? 'red.400' : 'orange.300'}
+                >
+                  {isMyTurn && timeLeft !== null ? `${timeLeft}s` : '▶'}
+                </Text>
+              )}
             </HStack>
           ))}
         </HStack>

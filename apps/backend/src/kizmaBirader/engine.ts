@@ -121,8 +121,6 @@ export function getLegalMoves(state: KizmaGameState): KizmaMove[] {
     // Yard'dan çıkış: yalnız 6
     if (token.pos === -1) {
       if (die !== EXIT_YARD_ROLL) continue;
-      const g = globalCell(color, 0)!;
-      if (isBlockedForOpponent(state, g, color)) continue;
       moves.push({ color, tokenId: token.id, die });
       continue;
     }
@@ -151,17 +149,10 @@ export function getLegalMoves(state: KizmaGameState): KizmaMove[] {
 export function applyRoll(state: KizmaGameState, die: number): KizmaGameState {
   if (state.phase !== 'rolling' || state.winner) return state;
 
-  const newSixes = die === 6 ? state.consecutiveSixes + 1 : 0;
-
-  // Üçüncü ardışık 6 → atış yanar, sıra geçer
-  if (die === 6 && newSixes >= MAX_CONSECUTIVE_SIXES) {
-    return nextTurn({ ...cloneState(state), dice: null, consecutiveSixes: 0, lastEvent: 'pass' });
-  }
-
   const rolled: KizmaGameState = {
     ...cloneState(state),
     dice: die,
-    consecutiveSixes: newSixes,
+    consecutiveSixes: 0,
     phase: 'moving',
     lastEvent: null,
   };
@@ -214,8 +205,9 @@ export function applyMove(state: KizmaGameState, move: KizmaMove): KizmaGameStat
     return { ...next, dice: null, phase: 'ended', winner: move.color, lastEvent: 'finish' };
   }
 
-  // 6 → ekstra hak (aynı oyuncu tekrar atar); değilse sıra geçer
-  if (die === EXTRA_TURN_ROLL) {
+  // 6, kırma veya eve giriş → ekstra hak; değilse sıra geçer
+  const getsExtraTurn = die === EXTRA_TURN_ROLL || event === 'capture' || event === 'finish';
+  if (getsExtraTurn) {
     return { ...next, dice: null, phase: 'rolling', lastEvent: event };
   }
 

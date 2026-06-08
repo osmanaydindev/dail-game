@@ -62,12 +62,12 @@ export const COLOR_HEX: Record<KizmaColor, string> = {
   red: '#e53e3e',
   blue: '#3182ce',
   yellow: '#f6c244',
-  white: '#f5f5f0',
+  white: '#38a169',
 };
 
 export const COLOR_LABEL_TR: Record<KizmaColor, string> = {
   red: 'Kırmızı',
   blue: 'Mavi',
   yellow: 'Sarı',
-  white: 'Beyaz',
+  white: 'Yeşil',
 };

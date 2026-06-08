@@ -225,10 +225,10 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           return (
             <g key={`ring-${g}`}>
               <rect x={c.x + 0.05} y={c.y + 0.05} width={0.9} height={0.9} rx={0.12}
-                fill={startColor ? COLOR_HEX[startColor] : '#ffffff'}
+                fill={startColor ? COLOR_HEX[startColor] : isSafe ? '#ffd54f' : '#ffffff'}
                 stroke="#bcc3cc" strokeWidth={0.04} />
               {isSafe && !isStart && (
-                <circle cx={c.x + 0.5} cy={c.y + 0.5} r={0.19} fill="none" stroke="#8892a8" strokeWidth={0.06} />
+                <circle cx={c.x + 0.5} cy={c.y + 0.5} r={0.19} fill="none" stroke="#b8860b" strokeWidth={0.06} />
               )}
             </g>
           );
