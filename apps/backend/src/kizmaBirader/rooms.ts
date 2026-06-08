@@ -12,12 +12,18 @@ export interface KizmaPlayer {
   isHost: boolean;
 }
 
+export interface ChatMessage {
+  text: string;
+  displayName: string;
+  ts: number;
+}
+
 export interface KizmaRoom {
   code: string;
   players: KizmaPlayer[];
   state: KizmaGameState | null;
   createdAt: number;
-  // Zar gösterimi sırasında (pas animasyonu) kısa süreli kilit — roll/move bloklanır.
+  messages: ChatMessage[];
   locked?: boolean;
 }
 
@@ -46,6 +52,7 @@ export function createRoom(userId: string, displayName: string, socketId: string
     players: [{ userId, displayName, socketId, color: null, ready: false, connected: true, isHost: true }],
     state: null,
     createdAt: Date.now(),
+    messages: [],
   };
   rooms.set(code, room);
   return room;

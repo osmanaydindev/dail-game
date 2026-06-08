@@ -7,7 +7,7 @@ import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import {
   createRoom, joinRoom, selectColor, setReady, rejoinRoom,
-  getRoomBySocketId, disconnectPlayer,
+  getRoomBySocketId, disconnectPlayer, getRoom,
 } from './rooms';
 import type { KizmaRoom } from './rooms';
 import {
@@ -205,11 +205,25 @@ export function attachKizmaBiraderSocket(io: Server): void {
           code: room.code,
           players: room.players.map((p) => ({ displayName: p.displayName, color: p.color })),
           legalMoves: getLegalMoves(room.state),
+          messages: room.messages ?? [],
         });
       } else {
         socket.emit('kizma:lobby', lobbyPayload(room));
       }
       emitLobby(nsp, room);
+    });
+
+    // ── Sohbet ────────────────────────────────────────────────────────────────────
+    socket.on('kizma:message', ({ text }: { text: string }) => {
+      const room = getRoomBySocketId(socket.id);
+      if (!room?.state || !text?.trim()) return;
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) return;
+      const msg = { text: text.trim().slice(0, 300), displayName: player.displayName, ts: Date.now() };
+      room.messages = room.messages ?? [];
+      room.messages.push(msg);
+      if (room.messages.length > 50) room.messages.shift();
+      nsp.to(room.code).emit('kizma:message', msg);
     });
 
     // ── Bağlantı koptu ───────────────────────────────────────────────────────────
