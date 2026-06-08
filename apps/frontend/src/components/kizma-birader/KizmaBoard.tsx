@@ -184,8 +184,8 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
       >
         <defs>
           <linearGradient id="kb-bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="#1e2840" />
-            <stop offset="100%" stopColor="#0d1420" />
+            <stop offset="0%" stopColor="#f0ece0" />
+            <stop offset="100%" stopColor="#e8e4d8" />
           </linearGradient>
           {(['red', 'blue', 'yellow', 'white'] as KizmaColor[]).map((c) => (
             <radialGradient key={`yd-${c}`} id={`kb-yard-${c}`} cx="40%" cy="40%" r="65%">
@@ -211,10 +211,8 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
             <g key={`yard-${c}`}>
               <rect x={b.x + 0.15} y={b.y + 0.15} width={b.w - 0.3} height={b.h - 0.3} rx={0.6}
                 fill={`url(#kb-yard-${c})`} />
-              <rect x={b.x + 1.0} y={b.y + 1.0} width={b.w - 2.0} height={b.h - 2.0} rx={0.45}
-                fill="#0e1319" opacity={0.82} />
               <rect x={b.x + 0.15} y={b.y + 0.15} width={b.w - 0.3} height={b.h - 0.3} rx={0.6}
-                fill="none" stroke={COLOR_HEX[c]} strokeWidth={0.1} opacity={0.6} />
+                fill="none" stroke={COLOR_HEX[c]} strokeWidth={0.12} opacity={0.7} />
             </g>
           );
         })}
@@ -227,8 +225,8 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           return (
             <g key={`ring-${g}`}>
               <rect x={c.x + 0.05} y={c.y + 0.05} width={0.9} height={0.9} rx={0.12}
-                fill={startColor ? COLOR_HEX[startColor] : '#dde3ef'}
-                stroke="#0e1319" strokeWidth={0.04} />
+                fill={startColor ? COLOR_HEX[startColor] : '#ffffff'}
+                stroke="#bcc3cc" strokeWidth={0.04} />
               {isSafe && !isStart && (
                 <circle cx={c.x + 0.5} cy={c.y + 0.5} r={0.19} fill="none" stroke="#8892a8" strokeWidth={0.06} />
               )}
@@ -241,20 +239,17 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           HOME_PATH[c].map((cell, i) => (
             <rect key={`home-${c}-${i}`}
               x={cell.x + 0.05} y={cell.y + 0.05} width={0.9} height={0.9} rx={0.12}
-              fill={COLOR_HEX[c]} opacity={0.88} stroke="#0e1319" strokeWidth={0.04} />
+              fill={COLOR_HEX[c]} opacity={0.88} stroke="#bcc3cc" strokeWidth={0.04} />
           )),
         )}
 
-        {/* Merkez — 4 üçgen + yıldız */}
+        {/* Merkez — 4 üçgen */}
         <g>
           <polygon points="6,6 9,6 7.5,7.5" fill={COLOR_HEX.blue} opacity={0.95} />
           <polygon points="9,6 9,9 7.5,7.5" fill={COLOR_HEX.yellow} opacity={0.95} />
           <polygon points="9,9 6,9 7.5,7.5" fill={COLOR_HEX.white} opacity={0.95} />
           <polygon points="6,9 6,6 7.5,7.5" fill={COLOR_HEX.red} opacity={0.95} />
-          <rect x={6} y={6} width={3} height={3} fill="none" stroke="#0e1319" strokeWidth={0.05} />
-          <rect x={6.8} y={6.8} width={1.4} height={1.4} rx={0.3} fill="#ffd700" opacity={0.95} stroke="#c8a200" strokeWidth={0.06} />
-          <text x={7.5} y={7.67} textAnchor="middle" fontSize={0.75} fontWeight="bold"
-            fill="#0e1319" fontFamily="serif">★</text>
+          <rect x={6} y={6} width={3} height={3} fill="none" stroke="#bcc3cc" strokeWidth={0.05} />
         </g>
 
         {/* Taşlar */}
