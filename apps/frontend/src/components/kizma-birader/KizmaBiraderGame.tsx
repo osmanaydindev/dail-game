@@ -121,6 +121,8 @@ export function KizmaBiraderGame({ user }: Props) {
   const myColorRef = useRef<KizmaColor | null>(null);
   const gameStateRef = useRef<KizmaGameState | null>(null);
   const legalMovesRef = useRef<KizmaMove[]>([]);
+  const diceAnimRef = useRef(false);
+  const pendingStateRef = useRef<{ state: KizmaGameState; legalMoves: KizmaMove[] } | null>(null);
 
   const [screen, setScreen] = useState<Screen>('home');
   const [lobby, setLobby] = useState<LobbyPayload | null>(null);
@@ -197,37 +199,49 @@ export function KizmaBiraderGame({ user }: Props) {
       if (p.messages) setMessages(p.messages);
     });
 
-    s.on('kizma:state', (p: { state: KizmaGameState; legalMoves: KizmaMove[] }) => {
+    const applyState = (p: { state: KizmaGameState; legalMoves: KizmaMove[] }) => {
       const prev = prevStateRef.current;
       const mc = myColorRef.current;
-
-      // Ses tespiti
       if (prev) {
         const ev = p.state.lastEvent;
         if (ev === 'capture') playCaptureSound();
-        else if (ev === 'move' || ev === 'enter') { /* adım sesi KizmaBoard'dan gelecek */ }
       }
-
-      // Sıra bildirimi
       if (mc && p.state.turn === mc && prevTurnRef.current !== mc && p.state.phase === 'rolling') {
         playTurnSound();
         setShowTurnNotif(true);
         setTimeout(() => setShowTurnNotif(false), 2200);
       }
-
       prevTurnRef.current = p.state.turn;
       prevStateRef.current = p.state;
       setGameState(p.state);
       setLegalMoves(p.legalMoves);
+    };
+
+    s.on('kizma:state', (p: { state: KizmaGameState; legalMoves: KizmaMove[] }) => {
+      if (diceAnimRef.current) {
+        pendingStateRef.current = p;
+        return;
+      }
+      applyState(p);
     });
 
-    s.on('kizma:dice', ({ die }: { die: number }) => {
+    s.on('kizma:dice', ({ die: _die }: { die: number }) => {
       playDiceSound();
+      diceAnimRef.current = true;
       let ticks = 0;
       const iv = setInterval(() => {
         setAnimDie(Math.ceil(Math.random() * 6));
-        if (++ticks >= 8) { clearInterval(iv); setAnimDie(null); }
-      }, 70);
+        if (++ticks >= 16) {
+          clearInterval(iv);
+          setAnimDie(null);
+          diceAnimRef.current = false;
+          const pending = pendingStateRef.current;
+          if (pending) {
+            pendingStateRef.current = null;
+            applyState(pending);
+          }
+        }
+      }, 75);
     });
 
     s.on('kizma:message', (msg: ChatMsg) => {
@@ -289,7 +303,7 @@ export function KizmaBiraderGame({ user }: Props) {
   // ── Sıra sayacı + otomatik hamle ────────────────────────────────────────────
   const isMyTurnForTimer = gameState?.turn === myColor && !gameState?.winner;
   useEffect(() => {
-    if (!isMyTurnForTimer || !gameState) { setTimeLeft(null); return; }
+    if (!gameState || gameState.winner) { setTimeLeft(null); return; }
 
     let t = TURN_SECONDS;
     setTimeLeft(t);
@@ -298,9 +312,10 @@ export function KizmaBiraderGame({ user }: Props) {
       setTimeLeft(t);
       if (t <= 0) {
         clearInterval(iv);
-        const s = socketRef.current;
         const gs = gameStateRef.current;
-        if (!s || !gs) return;
+        const mc = myColorRef.current;
+        const s = socketRef.current;
+        if (!gs || !mc || !s || gs.turn !== mc) return;
         if (gs.phase === 'rolling') {
           s.emit('kizma:roll');
         } else if (gs.phase === 'moving' && legalMovesRef.current.length > 0) {
@@ -309,7 +324,7 @@ export function KizmaBiraderGame({ user }: Props) {
       }
     }, 1000);
     return () => clearInterval(iv);
-  }, [isMyTurnForTimer, gameState?.turn, gameState?.phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [gameState?.turn, gameState?.phase, gameState?.winner]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const leaveToHome = (clearStorage = false) => {
     if (clearStorage) storage?.removeItem(STORAGE_KEY);
@@ -539,13 +554,7 @@ export function KizmaBiraderGame({ user }: Props) {
               <Text fontSize="xs" fontWeight={gameState.turn === c ? '800' : '500'}>{nameOf(c)}</Text>
               <Text fontSize="2xs" color="text.muted">{finishedCount(c)}/4</Text>
               {c === gameState.turn && (
-                <Text
-                  fontSize="2xs"
-                  fontWeight="800"
-                  color={isMyTurn && timeLeft !== null && timeLeft <= 10 ? 'red.400' : 'orange.300'}
-                >
-                  {isMyTurn && timeLeft !== null ? `${timeLeft}s` : '▶'}
-                </Text>
+                <Text fontSize="2xs" fontWeight="800" color="orange.300">▶</Text>
               )}
             </HStack>
           ))}
@@ -561,6 +570,7 @@ export function KizmaBiraderGame({ user }: Props) {
             onTokenClick={handleTokenClick}
             animDie={animDie}
             onStepSound={playMoveStepSound}
+            timeLeft={timeLeft}
           />
         </Box>
 
