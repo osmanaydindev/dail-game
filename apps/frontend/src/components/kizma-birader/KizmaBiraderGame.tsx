@@ -17,6 +17,7 @@ import type {
 const STORAGE_KEY = 'kizma-room';
 const storage = typeof window !== 'undefined' ? localStorage : null;
 const TURN_SECONDS = 30;
+const QUICK_REPLIES = ['selam 👋', 'iyi oyunlar 🍀', 'seri lütfen! 🚀', 'tebrikler! 🎉'];
 
 interface ChatMsg { text: string; displayName: string; ts: number; }
 
@@ -123,6 +124,7 @@ export function KizmaBiraderGame({ user }: Props) {
   const legalMovesRef = useRef<KizmaMove[]>([]);
   const diceAnimRef = useRef(false);
   const pendingStateRef = useRef<{ state: KizmaGameState; legalMoves: KizmaMove[] } | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [screen, setScreen] = useState<Screen>('home');
   const [lobby, setLobby] = useState<LobbyPayload | null>(null);
@@ -143,6 +145,7 @@ export function KizmaBiraderGame({ user }: Props) {
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [chatInput, setChatInput] = useState('');
+  const [toastMsg, setToastMsg] = useState<ChatMsg | null>(null);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatOpenRef = useRef(false);
 
@@ -151,10 +154,8 @@ export function KizmaBiraderGame({ user }: Props) {
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { legalMovesRef.current = legalMoves; }, [legalMoves]);
 
-  // Chat açılınca okunmamış sıfırla
   useEffect(() => { if (chatOpen) setUnread(0); }, [chatOpen]);
 
-  // Yeni mesajda en alta kaydır
   useEffect(() => {
     chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
@@ -223,16 +224,28 @@ export function KizmaBiraderGame({ user }: Props) {
 
     s.on('kizma:dice', ({ die: _die }: { die: number }) => {
       playDiceSound();
+      diceAnimRef.current = true;
       let ticks = 0;
       const iv = setInterval(() => {
         setAnimDie(Math.ceil(Math.random() * 6));
-        if (++ticks >= 8) { clearInterval(iv); setAnimDie(null); }
+        if (++ticks >= 8) {
+          clearInterval(iv);
+          setAnimDie(null);
+          diceAnimRef.current = false;
+          const pending = pendingStateRef.current;
+          if (pending) { pendingStateRef.current = null; applyState(pending); }
+        }
       }, 70);
     });
 
     s.on('kizma:message', (msg: ChatMsg) => {
       setMessages((prev) => [...prev, msg]);
-      if (!chatOpenRef.current) setUnread((n) => n + 1);
+      if (!chatOpenRef.current) {
+        setUnread((n) => n + 1);
+        setToastMsg(msg);
+        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = setTimeout(() => setToastMsg(null), 3500);
+      }
     });
 
     s.on('kizma:error', ({ message }: { message: string }) => {
@@ -286,8 +299,11 @@ export function KizmaBiraderGame({ user }: Props) {
     setChatInput('');
   }, [chatInput]);
 
+  const handleQuickReply = useCallback((text: string) => {
+    emit('kizma:message', { text });
+  }, []);
+
   // ── Sıra sayacı + otomatik hamle ────────────────────────────────────────────
-  const isMyTurnForTimer = gameState?.turn === myColor && !gameState?.winner;
   useEffect(() => {
     if (!gameState || gameState.winner) { setTimeLeft(null); return; }
 
@@ -316,7 +332,8 @@ export function KizmaBiraderGame({ user }: Props) {
     if (clearStorage) storage?.removeItem(STORAGE_KEY);
     setScreen('home'); setLobby(null); setGameState(null); setMyColor(null);
     setGamePlayers([]); setCode(''); setJoinInput(''); setLegalMoves([]);
-    setMessages([]); setUnread(0); prevStateRef.current = null; prevTurnRef.current = null;
+    setMessages([]); setUnread(0); setToastMsg(null);
+    prevStateRef.current = null; prevTurnRef.current = null;
   };
 
   const me = lobby?.players.find((p) => p.displayName === user.displayName);
@@ -446,7 +463,7 @@ export function KizmaBiraderGame({ user }: Props) {
   };
 
   return (
-    <Box position="relative" w="full">
+    <Box position="relative" w="full" minH="60vh">
       {/* Sıra sende bildirimi */}
       <Box
         position="fixed"
@@ -459,8 +476,7 @@ export function KizmaBiraderGame({ user }: Props) {
         zIndex={60}
         bg="green.600"
         color="white"
-        px={6}
-        py={3}
+        px={6} py={3}
         borderRadius="full"
         fontWeight="800"
         fontSize="md"
@@ -469,6 +485,34 @@ export function KizmaBiraderGame({ user }: Props) {
       >
         Sıra Sende! 🎲
       </Box>
+
+      {/* Mesaj toast balonu */}
+      {toastMsg && (
+        <Box
+          position="fixed"
+          bottom="150px"
+          left="50%"
+          transform="translateX(-50%)"
+          pointerEvents="none"
+          zIndex={65}
+          bg="surface.card"
+          borderRadius="2xl"
+          px={4} py={2.5}
+          borderWidth="1px"
+          borderColor="border.subtle"
+          boxShadow="0 8px 32px rgba(0,0,0,0.28)"
+          maxW="260px"
+          w="max-content"
+        >
+          <Text fontSize="2xs" color="text.muted" fontWeight="600" mb={0.5}>{toastMsg.displayName}</Text>
+          <Text fontSize="sm" fontWeight="600">{toastMsg.text}</Text>
+        </Box>
+      )}
+
+      {/* Chat backdrop */}
+      {chatOpen && (
+        <Box position="fixed" inset={0} zIndex={49} onClick={() => setChatOpen(false)} />
+      )}
 
       {/* Sohbet paneli */}
       <Box
@@ -480,7 +524,7 @@ export function KizmaBiraderGame({ user }: Props) {
         bg="surface.card"
         borderLeftWidth="1px"
         borderColor="border.subtle"
-        boxShadow="-4px 0 20px rgba(0,0,0,0.25)"
+        boxShadow="-4px 0 24px rgba(0,0,0,0.18)"
         transition="right 0.28s ease"
         zIndex={50}
         display="flex"
@@ -508,6 +552,18 @@ export function KizmaBiraderGame({ user }: Props) {
           ))}
           <div ref={chatBottomRef} />
         </Box>
+        {/* Hazır mesajlar */}
+        <Box px={3} pt={2} pb={1} display="flex" flexWrap="wrap" gap="6px">
+          {QUICK_REPLIES.map((t) => (
+            <Button
+              key={t} size="xs" variant="outline" borderRadius="full"
+              fontSize="2xs" fontWeight="600" h="24px" px={2.5}
+              onClick={() => handleQuickReply(t)}
+            >
+              {t}
+            </Button>
+          ))}
+        </Box>
         <Box px={3} py={2} borderTopWidth="1px" borderColor="border.subtle">
           <HStack gap={2}>
             <Input
@@ -525,6 +581,34 @@ export function KizmaBiraderGame({ user }: Props) {
         </Box>
       </Box>
 
+      {/* Chat FAB */}
+      <Box position="fixed" bottom="20px" right="20px" zIndex={55}>
+        <Box position="relative" display="inline-flex">
+          <Button
+            borderRadius="full"
+            w="52px" h="52px" p={0}
+            fontSize="xl"
+            colorPalette="brand"
+            variant="solid"
+            onClick={() => setChatOpen((v) => !v)}
+            boxShadow="0 4px 18px rgba(0,0,0,0.28)"
+          >
+            💬
+          </Button>
+          {unread > 0 && (
+            <Box
+              position="absolute" top="-4px" right="-4px"
+              bg="red.500" color="white" borderRadius="full"
+              w="20px" h="20px" fontSize="2xs" fontWeight="800"
+              display="flex" alignItems="center" justifyContent="center"
+              pointerEvents="none"
+            >
+              {unread > 9 ? '9+' : unread}
+            </Box>
+          )}
+        </Box>
+      </Box>
+
       <VStack gap={3} align="center" w="full">
         {error && (
           <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
@@ -532,22 +616,50 @@ export function KizmaBiraderGame({ user }: Props) {
           </Alert.Root>
         )}
 
-        {/* Oyuncu şeridi */}
-        <HStack justify="center" gap={3} w="full" maxW={{ base: '100%', md: '640px' }} px={{ base: 3, md: 0 }} wrap="wrap">
-          {gameState.activeColors.map((c) => (
-            <HStack key={c} gap={1.5} opacity={gameState.turn === c ? 1 : 0.5}>
-              <Box w="12px" h="12px" borderRadius="full" bg={COLOR_HEX[c]} borderWidth="1px" borderColor="border.subtle" />
-              <Text fontSize="xs" fontWeight={gameState.turn === c ? '800' : '500'}>{nameOf(c)}</Text>
-              <Text fontSize="2xs" color="text.muted">{finishedCount(c)}/4</Text>
-              {c === gameState.turn && (
-                <Text fontSize="2xs" fontWeight="800" color="orange.300">▶</Text>
-              )}
-            </HStack>
-          ))}
+        {/* Oyuncu şeridi — kart tasarımı */}
+        <HStack justify="center" gap={2} w="full" maxW={{ base: '100%', md: '640px' }} px={{ base: 3, md: 0 }} wrap="wrap">
+          {gameState.activeColors.map((c) => {
+            const active = gameState.turn === c;
+            const hex = COLOR_HEX[c];
+            return (
+              <Box
+                key={c}
+                px={2.5} py={1.5}
+                borderRadius="xl"
+                borderWidth="1.5px"
+                transition="all 0.25s ease"
+                style={{
+                  background: active ? `${hex}18` : 'transparent',
+                  borderColor: active ? hex : 'var(--chakra-colors-border-subtle)',
+                  boxShadow: active ? `0 0 14px ${hex}55` : 'none',
+                }}
+              >
+                <HStack gap={1.5}>
+                  <Box
+                    w="10px" h="10px" borderRadius="full"
+                    style={{ background: hex, boxShadow: active ? `0 0 6px ${hex}` : 'none' }}
+                  />
+                  <Text fontSize="xs" fontWeight={active ? '800' : '500'} opacity={active ? 1 : 0.55}>
+                    {nameOf(c)}
+                  </Text>
+                  <Text fontSize="2xs" color="text.muted" opacity={active ? 1 : 0.5}>
+                    {finishedCount(c)}/4
+                  </Text>
+                  {active && <Text fontSize="2xs" fontWeight="800" color="orange.300">▶</Text>}
+                </HStack>
+              </Box>
+            );
+          })}
         </HStack>
 
         {/* Board */}
-        <Box position="relative" w="full" maxW={{ base: '100vw', md: '560px' }} aspectRatio={1} mx="auto">
+        <Box
+          position="relative"
+          w="full" maxW={{ base: '100vw', md: '560px' }}
+          aspectRatio={1} mx="auto"
+          borderRadius="2xl" overflow="hidden"
+          boxShadow="0 12px 48px rgba(0,0,0,0.22), 0 2px 8px rgba(0,0,0,0.10)"
+        >
           <KizmaBoard
             state={gameState}
             myColor={myColor}
@@ -571,24 +683,19 @@ export function KizmaBiraderGame({ user }: Props) {
             return (
               <Box
                 position="absolute"
-                left={pos.left}
-                top={pos.top}
+                left={pos.left} top={pos.top}
                 transform="translate(-50%, -50%)"
                 w="36px" h="36px"
                 borderRadius="full"
                 bg="white"
-                border="2.5px solid"
-                borderColor={isLow ? 'red.400' : hex}
-                display="flex"
-                alignItems="center"
-                justifyContent="center"
-                fontSize="xs"
-                fontWeight="800"
-                color={isLow ? 'red.400' : hex}
-                pointerEvents="none"
-                zIndex={5}
-                boxShadow="0 2px 8px rgba(0,0,0,0.2)"
-                style={{ borderColor: isLow ? '#fc8181' : hex, color: isLow ? '#fc8181' : hex }}
+                display="flex" alignItems="center" justifyContent="center"
+                fontSize="xs" fontWeight="800"
+                pointerEvents="none" zIndex={5}
+                style={{
+                  border: `2.5px solid ${isLow ? '#fc8181' : hex}`,
+                  color: isLow ? '#fc8181' : hex,
+                  boxShadow: `0 2px 10px ${isLow ? '#fc818155' : hex + '55'}`,
+                }}
               >
                 {timeLeft}
               </Box>
@@ -597,47 +704,33 @@ export function KizmaBiraderGame({ user }: Props) {
         </Box>
 
         {/* Aksiyon şeridi */}
-        <HStack gap={4} align="center" px={2} wrap="wrap" justify="center">
-          <Text fontSize="sm" fontWeight="700" color={isMyTurn ? 'green.400' : 'text.muted'}>
-            {statusMsg()}
-          </Text>
+        <HStack gap={3} align="center" px={2} wrap="wrap" justify="center" pb={4}>
+          {/* Durum pill */}
+          <Box
+            px={3} py={1.5} borderRadius="full"
+            transition="background 0.2s ease"
+            style={{
+              background: isMyTurn ? '#38a169' : 'var(--chakra-colors-surface-subtle)',
+            }}
+          >
+            <Text fontSize="sm" fontWeight="700" style={{ color: isMyTurn ? 'white' : 'var(--chakra-colors-text-muted)' }}>
+              {statusMsg()}
+            </Text>
+          </Box>
           {isMyTurn && gameState.phase === 'rolling' && (
-            <Button colorPalette="brand" size="lg" onClick={handleRoll}>
+            <Button size="lg" onClick={handleRoll} border="none"
+              style={{
+                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+                color: 'white',
+                boxShadow: '0 4px 16px rgba(102,126,234,0.5)',
+              }}
+            >
               🎲 Zar At
             </Button>
           )}
           {gameState.winner && (
             <Button colorPalette="brand" onClick={() => leaveToHome(true)}>Yeni Oyun</Button>
           )}
-          {/* Sohbet toggle */}
-          <Box position="relative">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setChatOpen((v) => !v)}
-            >
-              💬
-              {unread > 0 && (
-                <Box
-                  position="absolute"
-                  top="-6px"
-                  right="-6px"
-                  bg="red.500"
-                  color="white"
-                  borderRadius="full"
-                  w="18px"
-                  h="18px"
-                  fontSize="2xs"
-                  fontWeight="800"
-                  display="flex"
-                  alignItems="center"
-                  justifyContent="center"
-                >
-                  {unread > 9 ? '9+' : unread}
-                </Box>
-              )}
-            </Button>
-          </Box>
           <Button variant="ghost" colorPalette="red" size="sm" onClick={() => leaveToHome()}>Çık</Button>
         </HStack>
       </VStack>
