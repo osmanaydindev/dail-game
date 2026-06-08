@@ -566,7 +566,7 @@ export function KizmaBiraderGame({ user }: Props) {
               )}
             </Button>
           </Box>
-          <Button variant="ghost" colorPalette="red" size="sm" onClick={leaveToHome}>Çık</Button>
+          <Button variant="ghost" colorPalette="red" size="sm" onClick={() => leaveToHome()}>Çık</Button>
         </HStack>
       </VStack>
 
