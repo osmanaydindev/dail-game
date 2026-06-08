@@ -47,10 +47,9 @@ interface Props {
   onTokenClick: (color: KizmaColor, tokenId: number) => void;
   animDie: number | null;
   onStepSound?: () => void;
-  timeLeft: number | null;
 }
 
-export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick, animDie, onStepSound, timeLeft }: Props) {
+export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick, animDie, onStepSound }: Props) {
   const movableTokenIds = useMemo(() => {
     if (!isMyTurn) return new Set<number>();
     return new Set(legalMoves.map((m) => m.tokenId));
@@ -252,30 +251,6 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           <polygon points="6,9 6,6 7.5,7.5" fill={COLOR_HEX.red} opacity={0.95} />
           <rect x={6} y={6} width={3} height={3} fill="none" stroke="#bcc3cc" strokeWidth={0.05} />
         </g>
-
-        {/* Süre göstergesi — oynayan oyuncunun yard kutusunun ortasında */}
-        {!state.winner && timeLeft !== null && (() => {
-          const b = YARD_BOX[state.turn];
-          if (!b) return null;
-          const cx = b.x + b.w / 2;
-          const cy = b.y + b.h / 2;
-          const isLow = isMyTurn && timeLeft <= 10;
-          const tokenColor = COLOR_HEX[state.turn];
-          return (
-            <g key="timer-badge" style={{ pointerEvents: 'none' }}>
-              <circle cx={cx} cy={cy} r={0.78} fill="white" opacity={0.93} />
-              <circle cx={cx} cy={cy} r={0.78} fill="none"
-                stroke={isLow ? '#e53e3e' : tokenColor} strokeWidth={0.1} />
-              <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-                fontSize={0.6} fontWeight="bold"
-                fill={isLow ? '#e53e3e' : tokenColor}
-                style={{ userSelect: 'none' }}
-              >
-                {timeLeft}
-              </text>
-            </g>
-          );
-        })()}
 
         {/* Taşlar */}
         {tokenNodes.map((n) => {

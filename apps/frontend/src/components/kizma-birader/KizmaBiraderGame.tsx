@@ -547,7 +547,7 @@ export function KizmaBiraderGame({ user }: Props) {
         </HStack>
 
         {/* Board */}
-        <Box w="full" maxW={{ base: '100vw', md: '560px' }} aspectRatio={1} mx="auto">
+        <Box position="relative" w="full" maxW={{ base: '100vw', md: '560px' }} aspectRatio={1} mx="auto">
           <KizmaBoard
             state={gameState}
             myColor={myColor}
@@ -556,8 +556,44 @@ export function KizmaBiraderGame({ user }: Props) {
             onTokenClick={handleTokenClick}
             animDie={animDie}
             onStepSound={playMoveStepSound}
-            timeLeft={timeLeft}
           />
+          {/* Süre badge'i — yard kutusunun ortasında HTML overlay */}
+          {!gameState.winner && timeLeft !== null && (() => {
+            const centers: Record<KizmaColor, { left: string; top: string }> = {
+              red:    { left: '20%', top: '20%' },
+              blue:   { left: '80%', top: '20%' },
+              yellow: { left: '80%', top: '80%' },
+              white:  { left: '20%', top: '80%' },
+            };
+            const pos = centers[gameState.turn];
+            const isLow = isMyTurn && timeLeft <= 10;
+            const hex = COLOR_HEX[gameState.turn];
+            return (
+              <Box
+                position="absolute"
+                left={pos.left}
+                top={pos.top}
+                transform="translate(-50%, -50%)"
+                w="36px" h="36px"
+                borderRadius="full"
+                bg="white"
+                border="2.5px solid"
+                borderColor={isLow ? 'red.400' : hex}
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                fontSize="xs"
+                fontWeight="800"
+                color={isLow ? 'red.400' : hex}
+                pointerEvents="none"
+                zIndex={5}
+                boxShadow="0 2px 8px rgba(0,0,0,0.2)"
+                style={{ borderColor: isLow ? '#fc8181' : hex, color: isLow ? '#fc8181' : hex }}
+              >
+                {timeLeft}
+              </Box>
+            );
+          })()}
         </Box>
 
         {/* Aksiyon şeridi */}
