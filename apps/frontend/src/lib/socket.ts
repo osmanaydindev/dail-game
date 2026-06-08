@@ -17,6 +17,6 @@ export function createKizmaBiraderSocket(): Socket {
   return io(`${SOCKET_URL}/kizma`, {
     path: '/api/socket.io',
     auth: { token: getAccessToken() },
-    transports: ['websocket'],
+    transports: ['polling', 'websocket'],
   });
 }
