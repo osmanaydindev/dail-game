@@ -24,7 +24,7 @@ interface ChatMsg { text: string; displayName: string; ts: number; }
 function playDiceSound() {
   try {
     const ctx = new AudioContext();
-    const times = [0, 0.07, 0.13, 0.19, 0.27, 0.37, 0.49, 0.63, 0.79, 0.97, 1.17];
+    const times = [0, 0.06, 0.12, 0.20, 0.29, 0.38, 0.49, 0.54];
     times.forEach((t) => {
       const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.025), ctx.sampleRate);
       const data = buf.getChannelData(0);
@@ -38,7 +38,7 @@ function playDiceSound() {
       gain.connect(ctx.destination);
       src.start(ctx.currentTime + t);
     });
-    setTimeout(() => ctx.close(), 1800);
+    setTimeout(() => ctx.close(), 700);
   } catch {}
 }
 
@@ -218,30 +218,16 @@ export function KizmaBiraderGame({ user }: Props) {
     };
 
     s.on('kizma:state', (p: { state: KizmaGameState; legalMoves: KizmaMove[] }) => {
-      if (diceAnimRef.current) {
-        pendingStateRef.current = p;
-        return;
-      }
       applyState(p);
     });
 
     s.on('kizma:dice', ({ die: _die }: { die: number }) => {
       playDiceSound();
-      diceAnimRef.current = true;
       let ticks = 0;
       const iv = setInterval(() => {
         setAnimDie(Math.ceil(Math.random() * 6));
-        if (++ticks >= 16) {
-          clearInterval(iv);
-          setAnimDie(null);
-          diceAnimRef.current = false;
-          const pending = pendingStateRef.current;
-          if (pending) {
-            pendingStateRef.current = null;
-            applyState(pending);
-          }
-        }
-      }, 75);
+        if (++ticks >= 8) { clearInterval(iv); setAnimDie(null); }
+      }, 70);
     });
 
     s.on('kizma:message', (msg: ChatMsg) => {

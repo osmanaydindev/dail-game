@@ -262,10 +262,10 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
           const isLow = isMyTurn && timeLeft <= 10;
           return (
             <g key="timer-bg">
-              <rect x={cx - 0.85} y={cy - 0.6} width={1.7} height={1.2} rx={0.28}
-                fill="rgba(0,0,0,0.52)" />
+              <rect x={cx - 0.6} y={cy - 0.42} width={1.2} height={0.84} rx={0.2}
+                fill="rgba(0,0,0,0.48)" />
               <text x={cx} y={cy} textAnchor="middle" dominantBaseline="central"
-                fontSize={0.88} fontWeight="bold"
+                fontSize={0.58} fontWeight="bold"
                 fill={isLow ? '#fc8181' : '#f0f0f0'}
                 style={{ pointerEvents: 'none', userSelect: 'none' }}
               >
