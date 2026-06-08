@@ -15,6 +15,7 @@ import type {
 } from './types';
 
 const STORAGE_KEY = 'kizma-room';
+const storage = typeof window !== 'undefined' ? localStorage : null;
 
 interface ChatMsg { text: string; displayName: string; ts: number; }
 
@@ -157,11 +158,11 @@ export function KizmaBiraderGame({ user }: Props) {
 
     s.on('kizma:created', ({ code: c }: { code: string }) => {
       setCode(c); setScreen('lobby'); setBusy(false);
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code: c }));
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code: c }));
     });
     s.on('kizma:joined', ({ code: c }: { code: string }) => {
       setCode(c); setScreen('lobby'); setBusy(false);
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code: c }));
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code: c }));
     });
     s.on('kizma:lobby', (payload: LobbyPayload) => {
       setLobby(payload);
@@ -172,7 +173,7 @@ export function KizmaBiraderGame({ user }: Props) {
       state: KizmaGameState; myColor: KizmaColor; code: string;
       players: GamePlayerInfo[]; legalMoves: KizmaMove[];
     }) => {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code: p.code }));
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code: p.code }));
       prevStateRef.current = p.state;
       prevTurnRef.current = p.state.turn;
       setGameState(p.state); setMyColor(p.myColor); setGamePlayers(p.players);
@@ -229,20 +230,20 @@ export function KizmaBiraderGame({ user }: Props) {
     });
 
     s.on('kizma:error', ({ message }: { message: string }) => {
-      if (rejoinRef.current) { rejoinRef.current = false; sessionStorage.removeItem(STORAGE_KEY); }
+      if (rejoinRef.current) { rejoinRef.current = false; storage?.removeItem(STORAGE_KEY); }
       setError(message); setBusy(false);
       setTimeout(() => setError(null), 3000);
     });
     s.on('connect_error', () => { setError('Sunucuya bağlanılamadı.'); setBusy(false); });
 
     s.on('connect', () => {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = storage?.getItem(STORAGE_KEY);
       if (raw) {
         try {
           const { code: c } = JSON.parse(raw) as { code: string };
           rejoinRef.current = true;
           s.emit('kizma:rejoin', { code: c });
-        } catch { sessionStorage.removeItem(STORAGE_KEY); }
+        } catch { storage?.removeItem(STORAGE_KEY); }
       }
     });
 
@@ -279,8 +280,8 @@ export function KizmaBiraderGame({ user }: Props) {
     setChatInput('');
   }, [chatInput]);
 
-  const leaveToHome = () => {
-    sessionStorage.removeItem(STORAGE_KEY);
+  const leaveToHome = (clearStorage = false) => {
+    if (clearStorage) storage?.removeItem(STORAGE_KEY);
     setScreen('home'); setLobby(null); setGameState(null); setMyColor(null);
     setGamePlayers([]); setCode(''); setJoinInput(''); setLegalMoves([]);
     setMessages([]); setUnread(0); prevStateRef.current = null; prevTurnRef.current = null;
@@ -390,7 +391,7 @@ export function KizmaBiraderGame({ user }: Props) {
             </Button>
           )}
         </HStack>
-        <Button variant="ghost" size="sm" color="text.muted" onClick={leaveToHome}>Odadan çık</Button>
+        <Button variant="ghost" size="sm" color="text.muted" onClick={() => leaveToHome(true)}>Odadan çık</Button>
       </VStack>
     );
   }
@@ -534,7 +535,7 @@ export function KizmaBiraderGame({ user }: Props) {
             </Button>
           )}
           {gameState.winner && (
-            <Button colorPalette="brand" onClick={leaveToHome}>Yeni Oyun</Button>
+            <Button colorPalette="brand" onClick={() => leaveToHome(true)}>Yeni Oyun</Button>
           )}
           {/* Sohbet toggle */}
           <Box position="relative">
@@ -577,7 +578,7 @@ export function KizmaBiraderGame({ user }: Props) {
           <Text fontSize="2xl" fontWeight="900" color="white" textAlign="center">
             {gameState.winner === myColor ? 'Kazandın!' : `${nameOf(gameState.winner)} kazandı`}
           </Text>
-          <Button colorPalette="brand" size="lg" onClick={leaveToHome}>Yeni Oyun / Odaya Dön</Button>
+          <Button colorPalette="brand" size="lg" onClick={() => leaveToHome(true)}>Yeni Oyun / Odaya Dön</Button>
         </Box>
       )}
     </Box>

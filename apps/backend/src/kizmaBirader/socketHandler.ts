@@ -73,6 +73,38 @@ export function attachKizmaBiraderSocket(io: Server): void {
 
     // ── Odaya katıl ────────────────────────────────────────────────────────────
     socket.on('kizma:join', ({ code, displayName }: { code: string; displayName: string }) => {
+      // Oyun başlamış ve kullanıcı zaten bu odadaysa → rejoin olarak işle
+      const existing = getRoom(code);
+      if (existing?.state) {
+        const wasPlayer = existing.players.find((p) => p.userId === userId);
+        if (wasPlayer) {
+          const rejoined = rejoinRoom(code, userId, socket.id);
+          if (!rejoined?.state) {
+            socket.emit('kizma:error', { message: 'Odaya yeniden bağlanılamadı.' });
+            return;
+          }
+          socket.join(rejoined.code);
+          const player = rejoined.players.find((p) => p.userId === userId)!;
+          socket.emit('kizma:reconnected', {
+            state: rejoined.state,
+            myColor: player.color,
+            code: rejoined.code,
+            players: rejoined.players.map((p) => ({ displayName: p.displayName, color: p.color })),
+            legalMoves: getLegalMoves(rejoined.state),
+            messages: rejoined.messages ?? [],
+          });
+          for (const p of rejoined.players) {
+            if (p.userId !== userId && p.connected) {
+              nsp.to(p.socketId).emit('kizma:opponent_reconnected', { displayName: wasPlayer.displayName });
+            }
+          }
+          emitLobby(nsp, rejoined);
+          return;
+        }
+        socket.emit('kizma:error', { message: 'Oyun zaten başladı.' });
+        return;
+      }
+
       const { room, error } = joinRoom(code, userId, displayName, socket.id);
       if (error || !room) {
         socket.emit('kizma:error', { message: error ?? 'Odaya katılınamadı.' });
