@@ -135,6 +135,7 @@ export function KizmaBiraderGame({ user }: Props) {
   const [joinInput, setJoinInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [codeCopied, setCodeCopied] = useState(false);
   // Zar animasyonu: hangi oyuncunun kartındaki yuvada döndüğü + o anki rastgele yüz.
   const [diceAnim, setDiceAnim] = useState<{ by: KizmaColor; face: number } | null>(null);
   const diceIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -737,6 +738,23 @@ export function KizmaBiraderGame({ user }: Props) {
               </Box>
             );
           })()}
+          {/* Oda kodu — yanlışlıkla çıkan aynı kodla geri girebilsin; tıklayınca kopyalanır */}
+          <Box
+            as="button"
+            title="Oda kodunu kopyala"
+            cursor="pointer"
+            px={2.5} py={1} borderRadius="full" bg="surface.subtle"
+            borderWidth="1px" borderColor="border.subtle"
+            onClick={() => {
+              navigator.clipboard?.writeText(code).catch(() => {});
+              setCodeCopied(true);
+              setTimeout(() => setCodeCopied(false), 1500);
+            }}
+          >
+            <Text fontSize="xs" fontFamily="mono" fontWeight="700" letterSpacing="wider" color={codeCopied ? 'green.400' : 'text.muted'}>
+              {codeCopied ? '✓ Kopyalandı' : `🔑 ${code}`}
+            </Text>
+          </Box>
           {gameState.winner && (
             <Button colorPalette="brand" onClick={() => leaveToHome(true)}>Yeni Oyun</Button>
           )}
