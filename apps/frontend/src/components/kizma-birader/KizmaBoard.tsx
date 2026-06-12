@@ -182,31 +182,42 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
             <stop offset="100%" stopColor="rgba(0,0,0,0)" />
           </radialGradient>
         ))}
+        {/* Çeyreklerin üstüne ince ışık geçişi */}
+        <linearGradient id="kb-sheen" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="rgba(255,255,255,0.25)" />
+          <stop offset="55%" stopColor="rgba(255,255,255,0)" />
+        </linearGradient>
+        {/* Yumuşak gölge — yard daireleri ve merkez */}
+        <filter id="kb-soft" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="0.06" stdDeviation="0.1" floodColor="#000000" floodOpacity="0.18" />
+        </filter>
       </defs>
 
       {/* Zemin */}
-      <rect x={0} y={0} width={GRID} height={GRID} rx={0.6} fill="#ffffff" stroke="#1f2630" strokeWidth={0.12} />
+      <rect x={0} y={0} width={GRID} height={GRID} rx={0.6} fill="#f6f4ee" stroke="#3a4150" strokeWidth={0.1} />
 
-      {/* Yard kutuları — renkli çeyrek + beyaz daire + taş slotları */}
+      {/* Yard kutuları — yumuşak renkli çeyrek + gölgeli beyaz daire + soket slotlar */}
       {(Object.keys(YARD_BOX) as KizmaColor[]).map((c) => {
         const b = YARD_BOX[c];
         return (
           <g key={`yard-${c}`}>
             <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={0.3} fill={BOARD_TINT[c]} />
-            <circle cx={b.x + 3} cy={b.y + 3} r={2.45} fill="#ffffff" stroke="#2a313d" strokeWidth={0.05} />
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={0.3} fill="url(#kb-sheen)" />
+            <circle cx={b.x + 3} cy={b.y + 3} r={2.45} fill="#ffffff" filter="url(#kb-soft)" />
+            <circle cx={b.x + 3} cy={b.y + 3} r={2.45} fill="none" stroke={BOARD_TINT[c]} strokeWidth={0.07} opacity={0.5} />
             {YARD_SLOTS[c].map((s, i) => (
               <circle
                 key={`slot-${c}-${i}`}
                 cx={s.x} cy={s.y} r={0.55}
-                fill={BOARD_TINT[c]} fillOpacity={0.35}
-                stroke={BOARD_TINT[c]} strokeWidth={0.07}
+                fill={BOARD_TINT[c]} fillOpacity={0.28}
+                stroke={BOARD_TINT[c]} strokeWidth={0.07} strokeOpacity={0.6}
               />
             ))}
           </g>
         );
       })}
 
-      {/* Halka hücreleri */}
+      {/* Halka hücreleri — bitişik, köşesiz kareler */}
       {RING_COORDS.map((c, g) => {
         const isStart = START_GLOBAL.has(g);
         const isSafe = SAFE_GLOBAL.has(g);
@@ -214,21 +225,20 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
         return (
           <g key={`ring-${g}`}>
             <rect
-              x={c.x + 0.06}
-              y={c.y + 0.06}
-              width={0.88}
-              height={0.88}
-              rx={0.14}
+              x={c.x}
+              y={c.y}
+              width={1}
+              height={1}
               fill={startColor ? BOARD_TINT[startColor] : '#ffffff'}
-              stroke="#2a313d"
-              strokeWidth={0.04}
+              stroke="#cfd5de"
+              strokeWidth={0.035}
             />
             {isSafe && !isStart && (
               <polygon
                 points={starPoints(c.x + 0.5, c.y + 0.5)}
-                fill="#d6dbe4"
-                stroke="#7c8597"
-                strokeWidth={0.05}
+                fill="#d3d9e2"
+                stroke="#aab2bf"
+                strokeWidth={0.03}
                 strokeLinejoin="round"
               />
             )}
@@ -236,20 +246,19 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
         );
       })}
 
-      {/* Ev sütunları + giriş oku */}
+      {/* Ev sütunları — bitişik kareler + giriş oku */}
       {(Object.keys(HOME_PATH) as KizmaColor[]).map((c) => (
         <g key={`home-${c}`}>
           {HOME_PATH[c].map((cell, i) => (
             <rect
               key={`home-${c}-${i}`}
-              x={cell.x + 0.06}
-              y={cell.y + 0.06}
-              width={0.88}
-              height={0.88}
-              rx={0.14}
+              x={cell.x}
+              y={cell.y}
+              width={1}
+              height={1}
               fill={BOARD_TINT[c]}
-              stroke="#2a313d"
-              strokeWidth={0.04}
+              stroke="#cfd5de"
+              strokeWidth={0.035}
             />
           ))}
           <polygon points={HOME_ARROW[c]} fill="#ffffff" opacity={0.9} />
@@ -257,12 +266,12 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
       ))}
 
       {/* Merkez goal — 4 üçgen */}
-      <g>
-        <polygon points="6,6 9,6 7.5,7.5" fill={BOARD_TINT.blue} stroke="#ffffff" strokeWidth={0.08} />
-        <polygon points="9,6 9,9 7.5,7.5" fill={BOARD_TINT.yellow} stroke="#ffffff" strokeWidth={0.08} />
-        <polygon points="9,9 6,9 7.5,7.5" fill={BOARD_TINT.white} stroke="#ffffff" strokeWidth={0.08} />
-        <polygon points="6,9 6,6 7.5,7.5" fill={BOARD_TINT.red} stroke="#ffffff" strokeWidth={0.08} />
-        <rect x={6} y={6} width={3} height={3} fill="none" stroke="#2a313d" strokeWidth={0.06} />
+      <g filter="url(#kb-soft)">
+        <polygon points="6,6 9,6 7.5,7.5" fill={BOARD_TINT.blue} stroke="#ffffff" strokeWidth={0.1} />
+        <polygon points="9,6 9,9 7.5,7.5" fill={BOARD_TINT.yellow} stroke="#ffffff" strokeWidth={0.1} />
+        <polygon points="9,9 6,9 7.5,7.5" fill={BOARD_TINT.white} stroke="#ffffff" strokeWidth={0.1} />
+        <polygon points="6,9 6,6 7.5,7.5" fill={BOARD_TINT.red} stroke="#ffffff" strokeWidth={0.1} />
+        <rect x={6} y={6} width={3} height={3} fill="none" stroke="#3a4150" strokeWidth={0.05} />
       </g>
 
       {/* Taşlar */}
@@ -275,16 +284,14 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
             style={{ cursor: n.movable ? 'pointer' : 'default' }}
           >
             {n.movable && (
-              <circle cx={n.x} cy={n.y} r={0.46} fill="none" stroke="#16a34a" strokeWidth={0.12}>
+              <circle cx={n.x} cy={n.y} r={0.46} fill="none" stroke="#22c55e" strokeWidth={0.12}>
                 <animate attributeName="r" values="0.40;0.50;0.40" dur="1.1s" repeatCount="indefinite" />
                 <animate attributeName="opacity" values="1;0.45;1" dur="1.1s" repeatCount="indefinite" />
               </circle>
             )}
-            {/* Gölge */}
-            <circle cx={n.x + 0.04} cy={n.y + 0.07} r={0.32} fill="rgba(0,0,0,0.35)" />
-            {/* Açık zemin: ince koyu dış halka + beyaz iç kontur taşı ayrıştırır */}
-            <circle cx={n.x} cy={n.y} r={0.4} fill="none" stroke="#1a1f27" strokeWidth={0.04} />
-            <circle cx={n.x} cy={n.y} r={0.34} fill={fill} stroke="#ffffff" strokeWidth={0.09} />
+            {/* Taşın altında merkezli yumuşak gölge */}
+            <ellipse cx={n.x} cy={n.y + 0.3} rx={0.26} ry={0.1} fill="rgba(0,0,0,0.20)" />
+            <circle cx={n.x} cy={n.y} r={0.34} fill={fill} stroke="#ffffff" strokeWidth={0.07} />
             {/* Işık */}
             <circle cx={n.x} cy={n.y} r={0.32} fill={`url(#kb-tok-${n.color})`} />
             <circle cx={n.x} cy={n.y - 0.08} r={0.11} fill="#ffffff" opacity={0.45} />

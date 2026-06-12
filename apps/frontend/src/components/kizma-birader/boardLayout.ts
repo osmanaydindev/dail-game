@@ -49,12 +49,14 @@ export const HOME_PATH: Record<KizmaColor, Coord[]> = {
   white: [{ x: 7, y: 13 }, { x: 7, y: 12 }, { x: 7, y: 11 }, { x: 7, y: 10 }, { x: 7, y: 9 }, { x: 7, y: 8 }],
 };
 
-// Yard (başlangıç köşesi) — 4 taş slotu.
+// Yard (başlangıç köşesi) — 4 taş slotu. Çeyrek merkezinden ±1.05:
+// köşe slot merkezi 1.485 uzakta + slot yarıçapı 0.55 = 2.03 < beyaz daire 2.45,
+// yani slotlar (ve taşlar) dairenin içinde kalır.
 export const YARD_SLOTS: Record<KizmaColor, Coord[]> = {
-  red: [{ x: 1.5, y: 1.5 }, { x: 3.5, y: 1.5 }, { x: 1.5, y: 3.5 }, { x: 3.5, y: 3.5 }],
-  blue: [{ x: 10.5, y: 1.5 }, { x: 12.5, y: 1.5 }, { x: 10.5, y: 3.5 }, { x: 12.5, y: 3.5 }],
-  yellow: [{ x: 10.5, y: 10.5 }, { x: 12.5, y: 10.5 }, { x: 10.5, y: 12.5 }, { x: 12.5, y: 12.5 }],
-  white: [{ x: 1.5, y: 10.5 }, { x: 3.5, y: 10.5 }, { x: 1.5, y: 12.5 }, { x: 3.5, y: 12.5 }],
+  red: [{ x: 1.95, y: 1.95 }, { x: 4.05, y: 1.95 }, { x: 1.95, y: 4.05 }, { x: 4.05, y: 4.05 }],
+  blue: [{ x: 10.95, y: 1.95 }, { x: 13.05, y: 1.95 }, { x: 10.95, y: 4.05 }, { x: 13.05, y: 4.05 }],
+  yellow: [{ x: 10.95, y: 10.95 }, { x: 13.05, y: 10.95 }, { x: 10.95, y: 13.05 }, { x: 13.05, y: 13.05 }],
+  white: [{ x: 1.95, y: 10.95 }, { x: 4.05, y: 10.95 }, { x: 1.95, y: 13.05 }, { x: 4.05, y: 13.05 }],
 };
 
 // Köşe yard kutuları (6×6) ve renk eşlemesi.

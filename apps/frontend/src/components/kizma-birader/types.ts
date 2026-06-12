@@ -60,20 +60,21 @@ export interface GamePlayerInfo {
 
 export const KIZMA_COLORS: KizmaColor[] = ['red', 'blue', 'yellow', 'white'];
 
+// Taş dolguları — tahtadan ayrışması için zeminden bir tık daha doygun.
 export const COLOR_HEX: Record<KizmaColor, string> = {
-  red: '#e53e3e',
-  blue: '#3182ce',
+  red: '#ef5350',
+  blue: '#42a5f5',
   yellow: '#f6c244',
-  white: '#38a169',
+  white: '#66bb6a',
 };
 
-// Tahta çeyreği / kart arka planı tonu. 'white' rengi görsel olarak yeşile
-// taşındığı için (COLOR_HEX ile aynı) burada da yeşil kullanılır.
+// Tahta çeyreği / ev yolu / kart arka planı tonu — orta yumuşak palet.
+// 'white' rengi görsel olarak yeşile taşındı.
 export const BOARD_TINT: Record<KizmaColor, string> = {
-  red: '#e53e3e',
-  blue: '#3182ce',
-  yellow: '#f6c244',
-  white: '#38a169',
+  red: '#e57373',
+  blue: '#64b5f6',
+  yellow: '#ffd54f',
+  white: '#81c784',
 };
 
 export const COLOR_LABEL_TR: Record<KizmaColor, string> = {
