@@ -8,15 +8,25 @@ import { env } from '../config/env';
 import { User } from '../models/User';
 import {
   createRoom, joinRoom, selectColor, setReady, rejoinRoom,
-  getRoomBySocketId, disconnectPlayer, getRoom,
+  getRoomBySocketId, disconnectPlayer, getRoom, trimMessages,
 } from './rooms';
-import type { KizmaRoom } from './rooms';
+import type { KizmaRoom, ChatMessage } from './rooms';
 import {
   createInitialState, rollDice, applyRoll, getLegalMoves, applyMove, COLORS_ORDER,
 } from './engine';
 import type { KizmaColor, KizmaMove } from './types';
 
 interface JwtPayload { sub: string; role: string; }
+
+// Sesli mesaj sınırları
+const VOICE_MAX_BYTES = 300 * 1024; // ~15 sn @ 32kbps opus'a bolca yeter
+const VOICE_MIN_INTERVAL_MS = 2500; // kullanıcı başına hız limiti
+const lastVoiceAt = new Map<string, number>(); // userId -> son ses ts
+
+/** Oyuncunun göreceği sohbet geçmişi: kendi odaya girişinden sonrası. */
+function messagesFor(room: KizmaRoom, joinedAt: number): ChatMessage[] {
+  return (room.messages ?? []).filter((m) => m.ts >= joinedAt);
+}
 
 function lobbyPayload(room: KizmaRoom) {
   const players = room.players.map((p) => ({
@@ -98,7 +108,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
             code: rejoined.code,
             players: rejoined.players.map((p) => ({ displayName: p.displayName, avatarUrl: p.avatarUrl, color: p.color })),
             legalMoves: getLegalMoves(rejoined.state),
-            messages: rejoined.messages ?? [],
+            messages: messagesFor(rejoined, player.joinedAt),
           });
           for (const p of rejoined.players) {
             if (p.userId !== userId && p.connected) {
@@ -244,7 +254,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
           code: room.code,
           players: room.players.map((p) => ({ displayName: p.displayName, avatarUrl: p.avatarUrl, color: p.color })),
           legalMoves: getLegalMoves(room.state),
-          messages: room.messages ?? [],
+          messages: messagesFor(room, player.joinedAt),
         });
       } else {
         socket.emit('kizma:lobby', lobbyPayload(room));
@@ -252,16 +262,40 @@ export function attachKizmaBiraderSocket(io: Server): void {
       emitLobby(nsp, room);
     });
 
-    // ── Sohbet ────────────────────────────────────────────────────────────────────
+    // ── Sohbet: metin ─────────────────────────────────────────────────────────────
     socket.on('kizma:message', ({ text }: { text: string }) => {
       const room = getRoomBySocketId(socket.id);
       if (!room?.state || !text?.trim()) return;
       const player = room.players.find((p) => p.socketId === socket.id);
       if (!player) return;
-      const msg = { text: text.trim().slice(0, 300), displayName: player.displayName, ts: Date.now() };
+      const msg: ChatMessage = { type: 'text', text: text.trim().slice(0, 300), displayName: player.displayName, ts: Date.now() };
       room.messages = room.messages ?? [];
       room.messages.push(msg);
-      if (room.messages.length > 50) room.messages.shift();
+      trimMessages(room);
+      nsp.to(room.code).emit('kizma:message', msg);
+    });
+
+    // ── Sohbet: sesli mesaj ───────────────────────────────────────────────────────
+    socket.on('kizma:voice', ({ audio, mime, dur }: { audio: Buffer; mime?: string; dur?: number }) => {
+      const room = getRoomBySocketId(socket.id);
+      if (!room?.state) return;
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) return;
+      if (!Buffer.isBuffer(audio) || audio.length === 0 || audio.length > VOICE_MAX_BYTES) return;
+      const now = Date.now();
+      if (now - (lastVoiceAt.get(player.userId) ?? 0) < VOICE_MIN_INTERVAL_MS) return;
+      lastVoiceAt.set(player.userId, now);
+      const msg: ChatMessage = {
+        type: 'voice',
+        audio,
+        mime: typeof mime === 'string' ? mime.slice(0, 64) : 'audio/webm',
+        dur: Math.min(Math.max(Math.round(Number(dur) || 0), 1), 20),
+        displayName: player.displayName,
+        ts: now,
+      };
+      room.messages = room.messages ?? [];
+      room.messages.push(msg);
+      trimMessages(room);
       nsp.to(room.code).emit('kizma:message', msg);
     });
 

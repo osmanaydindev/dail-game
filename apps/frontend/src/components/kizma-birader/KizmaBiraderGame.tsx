@@ -20,7 +20,51 @@ const storage = typeof window !== 'undefined' ? localStorage : null;
 const TURN_SECONDS = 30;
 const QUICK_REPLIES = ['selam 👋', 'iyi oyunlar 🍀', 'seri lütfen! 🚀', 'tebrikler! 🎉'];
 
-interface ChatMsg { text: string; displayName: string; ts: number; }
+interface ChatMsg {
+  type?: 'text' | 'voice';
+  text?: string;
+  audio?: ArrayBuffer;
+  mime?: string;
+  dur?: number;
+  displayName: string;
+  ts: number;
+}
+
+// ── Sesli mesaj balonu — oynat/durdur ────────────────────────────────────────
+function VoiceBubble({ audio, mime, dur }: { audio: ArrayBuffer; mime?: string; dur?: number }) {
+  const [playing, setPlaying] = useState(false);
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => () => { audioElRef.current?.pause(); }, []);
+
+  const toggle = () => {
+    let a = audioElRef.current;
+    if (!a) {
+      a = new Audio(URL.createObjectURL(new Blob([audio], { type: mime || 'audio/webm' })));
+      a.onended = () => setPlaying(false);
+      audioElRef.current = a;
+    }
+    if (playing) {
+      a.pause();
+      setPlaying(false);
+    } else {
+      a.currentTime = 0;
+      a.play().catch(() => {});
+      setPlaying(true);
+    }
+  };
+
+  return (
+    <button
+      onClick={toggle}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontWeight: 600, cursor: 'pointer' }}
+      aria-label={playing ? 'Sesi durdur' : 'Sesi oynat'}
+    >
+      <span>{playing ? '⏸️' : '▶️'}</span>
+      <span>🎤 {dur ?? 0} sn</span>
+    </button>
+  );
+}
 
 // ── Web Audio sesler ──────────────────────────────────────────────────────────
 function playDiceSound() {
@@ -303,6 +347,74 @@ export function KizmaBiraderGame({ user }: Props) {
     setChatInput('');
   }, [chatInput]);
 
+  // ── Sesli mesaj kaydı (bas-konuş) ───────────────────────────────────────────
+  const recRef = useRef<MediaRecorder | null>(null);
+  const recChunksRef = useRef<BlobPart[]>([]);
+  const recStartRef = useRef(0);
+  const recCancelRef = useRef(false);
+  const recTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const recAutoStopRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [recSecs, setRecSecs] = useState(0);
+
+  const stopRec = useCallback((cancel: boolean) => {
+    const mr = recRef.current;
+    if (!mr) return;
+    recRef.current = null;
+    recCancelRef.current = cancel;
+    if (recTimerRef.current) { clearInterval(recTimerRef.current); recTimerRef.current = null; }
+    if (recAutoStopRef.current) { clearTimeout(recAutoStopRef.current); recAutoStopRef.current = null; }
+    setRecording(false);
+    if (mr.state !== 'inactive') mr.stop();
+  }, []);
+
+  const startRec = useCallback(async () => {
+    if (recRef.current) return;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      // iOS Safari webm bilmez; destekli formatı seç
+      const mime = typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/mp4') ? 'audio/mp4' : '';
+      const mr = new MediaRecorder(stream, { ...(mime ? { mimeType: mime } : {}), audioBitsPerSecond: 32000 });
+      recChunksRef.current = [];
+      recCancelRef.current = false;
+      mr.ondataavailable = (e) => { if (e.data.size > 0) recChunksRef.current.push(e.data); };
+      mr.onstop = async () => {
+        stream.getTracks().forEach((t) => t.stop());
+        const durMs = Date.now() - recStartRef.current;
+        if (recCancelRef.current || durMs < 600) return; // çok kısa / iptal
+        const blob = new Blob(recChunksRef.current, { type: mr.mimeType || 'audio/webm' });
+        if (blob.size < 800) return;
+        if (blob.size > 300 * 1024) {
+          setError('Ses mesajı çok büyük.');
+          setTimeout(() => setError(null), 3000);
+          return;
+        }
+        const ab = await blob.arrayBuffer();
+        socketRef.current?.emit('kizma:voice', { audio: ab, mime: blob.type, dur: Math.round(durMs / 1000) });
+      };
+      recRef.current = mr;
+      recStartRef.current = Date.now();
+      setRecSecs(0);
+      setRecording(true);
+      recTimerRef.current = setInterval(() => {
+        setRecSecs(Math.floor((Date.now() - recStartRef.current) / 1000));
+      }, 250);
+      recAutoStopRef.current = setTimeout(() => stopRec(false), 15000); // maks 15 sn
+      mr.start();
+    } catch {
+      setError('Mikrofon izni alınamadı.');
+      setTimeout(() => setError(null), 3000);
+    }
+  }, [stopRec]);
+
+  // Unmount'ta kaydı sessizce kapat
+  useEffect(() => () => {
+    recCancelRef.current = true;
+    try { recRef.current?.stop(); } catch { /* zaten kapalı */ }
+  }, []);
+
   const handleQuickReply = useCallback((text: string) => {
     emit('kizma:message', { text });
   }, []);
@@ -534,7 +646,7 @@ export function KizmaBiraderGame({ user }: Props) {
           w="max-content"
         >
           <Text fontSize="2xs" color="text.muted" fontWeight="600" mb={0.5}>{toastMsg.displayName}</Text>
-          <Text fontSize="sm" fontWeight="600">{toastMsg.text}</Text>
+          <Text fontSize="sm" fontWeight="600">{toastMsg.type === 'voice' ? '🎤 Sesli mesaj' : toastMsg.text}</Text>
         </Box>
       )}
 
@@ -575,7 +687,9 @@ export function KizmaBiraderGame({ user }: Props) {
                 px={3} py={1.5} borderRadius="lg" fontSize="sm" maxW="240px"
                 alignSelf={m.displayName === user.displayName ? 'flex-end' : 'flex-start'}
               >
-                {m.text}
+                {m.type === 'voice' && m.audio
+                  ? <VoiceBubble audio={m.audio} mime={m.mime} dur={m.dur} />
+                  : m.text}
               </Box>
             </Box>
           ))}
@@ -599,11 +713,26 @@ export function KizmaBiraderGame({ user }: Props) {
               value={chatInput}
               onChange={(e) => setChatInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); handleSendChat(); } }}
-              placeholder="Mesaj yaz…"
+              placeholder={recording ? `🔴 Kaydediliyor… ${recSecs} sn` : 'Mesaj yaz…'}
               size="sm"
               borderRadius="lg"
+              disabled={recording}
             />
-            <Button size="sm" colorPalette="brand" onClick={handleSendChat} disabled={!chatInput.trim()}>
+            {/* Bas-konuş: basılı tut → kaydet, bırak → gönder, dışarı kaydır → iptal */}
+            <Button
+              size="sm"
+              colorPalette={recording ? 'red' : 'gray'}
+              variant={recording ? 'solid' : 'outline'}
+              onPointerDown={(e) => { e.preventDefault(); startRec(); }}
+              onPointerUp={() => stopRec(false)}
+              onPointerLeave={() => stopRec(true)}
+              onContextMenu={(e) => e.preventDefault()}
+              title="Basılı tut: kaydet · Bırak: gönder · Dışarı kaydır: iptal"
+              style={{ touchAction: 'none' }}
+            >
+              {recording ? `● ${recSecs}` : '🎤'}
+            </Button>
+            <Button size="sm" colorPalette="brand" onClick={handleSendChat} disabled={!chatInput.trim() || recording}>
               Gönder
             </Button>
           </HStack>

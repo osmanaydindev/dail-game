@@ -11,12 +11,37 @@ export interface KizmaPlayer {
   ready: boolean;
   connected: boolean;
   isHost: boolean;
+  // Odaya ilk giriş anı — sohbet geçmişi bu andan itibaren gösterilir
+  // (odada olan herkes kendi girişinden sonraki tüm mesajları görür).
+  joinedAt: number;
 }
 
 export interface ChatMessage {
-  text: string;
+  type?: 'text' | 'voice'; // eski kayıtlar type'sız = text
+  text?: string;
+  audio?: Buffer; // voice: opus/webm ya da mp4 ham veri
+  mime?: string;
+  dur?: number; // saniye
   displayName: string;
   ts: number;
+}
+
+// Oda sohbet bellek sınırları: mesaj sayısı + toplam ses byte bütçesi.
+// Bütçe aşılırsa en eski SES mesajları düşer (metinler kalır).
+const MAX_MESSAGES = 300;
+const MAX_VOICE_BYTES = 6 * 1024 * 1024;
+
+export function trimMessages(room: KizmaRoom): void {
+  if (room.messages.length > MAX_MESSAGES) {
+    room.messages.splice(0, room.messages.length - MAX_MESSAGES);
+  }
+  let voiceBytes = room.messages.reduce((s, m) => s + (m.audio?.length ?? 0), 0);
+  while (voiceBytes > MAX_VOICE_BYTES) {
+    const idx = room.messages.findIndex((m) => m.type === 'voice');
+    if (idx === -1) break;
+    voiceBytes -= room.messages[idx].audio?.length ?? 0;
+    room.messages.splice(idx, 1);
+  }
 }
 
 export interface KizmaRoom {
@@ -52,7 +77,7 @@ export function createRoom(
   do { code = generateCode(); } while (rooms.has(code));
   const room: KizmaRoom = {
     code,
-    players: [{ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: true }],
+    players: [{ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: true, joinedAt: Date.now() }],
     state: null,
     createdAt: Date.now(),
     messages: [],
@@ -79,7 +104,7 @@ export function joinRoom(
   if (room.players.filter((p) => p.connected).length >= MAX_PLAYERS) {
     return { room: null as unknown as KizmaRoom, error: 'Oda dolu.' };
   }
-  room.players.push({ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: false });
+  room.players.push({ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: false, joinedAt: Date.now() });
   return { room };
 }
 
