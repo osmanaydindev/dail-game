@@ -8,6 +8,7 @@ import type { Socket } from 'socket.io-client';
 import { createKizmaBiraderSocket } from '@/lib/socket';
 import { KizmaBoard } from './KizmaBoard';
 import { PlayerCard } from './PlayerCard';
+import type { CardBubble } from './PlayerCard';
 import {
   KIZMA_COLORS, COLOR_HEX, COLOR_LABEL_TR,
 } from './types';
@@ -19,6 +20,7 @@ const STORAGE_KEY = 'kizma-room';
 const storage = typeof window !== 'undefined' ? localStorage : null;
 const TURN_SECONDS = 30;
 const QUICK_REPLIES = ['selam 👋', 'iyi oyunlar 🍀', 'seri lütfen! 🚀', 'tebrikler! 🎉'];
+const EMOTE_LIST = ['😂', '😡', '👍', '😭', '🎉', '😎']; // backend EMOTES seti ile birebir
 
 interface ChatMsg {
   type?: 'text' | 'voice';
@@ -167,7 +169,7 @@ export function KizmaBiraderGame({ user }: Props) {
   const myColorRef = useRef<KizmaColor | null>(null);
   const gameStateRef = useRef<KizmaGameState | null>(null);
   const legalMovesRef = useRef<KizmaMove[]>([]);
-  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const gamePlayersRef = useRef<GamePlayerInfo[]>([]);
 
   const [screen, setScreen] = useState<Screen>('home');
   const [lobby, setLobby] = useState<LobbyPayload | null>(null);
@@ -191,14 +193,34 @@ export function KizmaBiraderGame({ user }: Props) {
   const [chatOpen, setChatOpen] = useState(false);
   const [unread, setUnread] = useState(0);
   const [chatInput, setChatInput] = useState('');
-  const [toastMsg, setToastMsg] = useState<ChatMsg | null>(null);
+  const [emoteStripOpen, setEmoteStripOpen] = useState(false);
   const chatBottomRef = useRef<HTMLDivElement>(null);
   const chatOpenRef = useRef(false);
+
+  // Kart balonları: mesaj/emote gönderenin kartına bitişik belirir (renk başına 1)
+  const [cardBubbles, setCardBubbles] = useState<Partial<Record<KizmaColor, CardBubble>>>({});
+  const bubbleTimersRef = useRef<Partial<Record<KizmaColor, ReturnType<typeof setTimeout>>>>({});
 
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
   useEffect(() => { chatOpenRef.current = chatOpen; }, [chatOpen]);
   useEffect(() => { gameStateRef.current = gameState; }, [gameState]);
   useEffect(() => { legalMovesRef.current = legalMoves; }, [legalMoves]);
+  useEffect(() => { gamePlayersRef.current = gamePlayers; }, [gamePlayers]);
+
+  const showCardBubble = useCallback((displayName: string, bubble: CardBubble, ms: number) => {
+    const color = gamePlayersRef.current.find((p) => p.displayName === displayName)?.color;
+    if (!color) return;
+    setCardBubbles((prev) => ({ ...prev, [color]: bubble }));
+    const timers = bubbleTimersRef.current;
+    if (timers[color]) clearTimeout(timers[color]);
+    timers[color] = setTimeout(() => {
+      setCardBubbles((prev) => {
+        const next = { ...prev };
+        delete next[color];
+        return next;
+      });
+    }, ms);
+  }, []);
 
   useEffect(() => { if (chatOpen) setUnread(0); }, [chatOpen]);
 
@@ -285,12 +307,16 @@ export function KizmaBiraderGame({ user }: Props) {
 
     s.on('kizma:message', (msg: ChatMsg) => {
       setMessages((prev) => [...prev, msg]);
-      if (!chatOpenRef.current) {
-        setUnread((n) => n + 1);
-        setToastMsg(msg);
-        if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
-        toastTimerRef.current = setTimeout(() => setToastMsg(null), 3500);
-      }
+      if (!chatOpenRef.current) setUnread((n) => n + 1);
+      // Mesaj, gönderenin kartında konuşma balonu olarak belirir
+      const content = msg.type === 'voice'
+        ? '🎤 Sesli mesaj'
+        : (msg.text ?? '').slice(0, 60);
+      showCardBubble(msg.displayName, { content, kind: msg.type === 'voice' ? 'voice' : 'text' }, 4000);
+    });
+
+    s.on('kizma:emote', ({ emoji, displayName }: { emoji: string; displayName: string; ts: number }) => {
+      showCardBubble(displayName, { content: emoji, kind: 'emoji' }, 3000);
     });
 
     s.on('kizma:error', ({ message }: { message: string }) => {
@@ -313,9 +339,10 @@ export function KizmaBiraderGame({ user }: Props) {
 
     return () => {
       if (diceIvRef.current) clearInterval(diceIvRef.current);
+      Object.values(bubbleTimersRef.current).forEach((t) => t && clearTimeout(t));
       s.disconnect();
     };
-  }, []);
+  }, [showCardBubble]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
   const emit = (ev: string, payload?: unknown) => socketRef.current?.emit(ev, payload);
@@ -417,6 +444,12 @@ export function KizmaBiraderGame({ user }: Props) {
 
   const handleQuickReply = useCallback((text: string) => {
     emit('kizma:message', { text });
+    setEmoteStripOpen(false);
+  }, []);
+
+  const handleEmote = useCallback((emoji: string) => {
+    emit('kizma:emote', { emoji });
+    setEmoteStripOpen(false);
   }, []);
 
   // ── Sıra sayacı + otomatik hamle ────────────────────────────────────────────
@@ -448,7 +481,7 @@ export function KizmaBiraderGame({ user }: Props) {
     if (clearStorage) storage?.removeItem(STORAGE_KEY);
     setScreen('home'); setLobby(null); setGameState(null); setMyColor(null);
     setGamePlayers([]); setCode(''); setJoinInput(''); setLegalMoves([]);
-    setMessages([]); setUnread(0); setToastMsg(null);
+    setMessages([]); setUnread(0); setCardBubbles({}); setEmoteStripOpen(false);
     prevStateRef.current = null; prevTurnRef.current = null;
   };
 
@@ -576,6 +609,7 @@ export function KizmaBiraderGame({ user }: Props) {
     const dieFace = !rolling && gameState.dice != null && gameState.turn === c ? gameState.dice : null;
     const isTurn = gameState.turn === c && !gameState.winner;
     const canRoll = isTurn && c === myColor && gameState.phase === 'rolling' && !rolling;
+    const bubble = cardBubbles[c] ?? null;
     return (
       <PlayerCard
         key={c}
@@ -590,6 +624,9 @@ export function KizmaBiraderGame({ user }: Props) {
         rollingFace={diceAnim?.face ?? 1}
         onRollTap={handleRoll}
         align={align}
+        bubble={bubble}
+        bubblePlacement={c === 'red' || c === 'blue' ? 'below' : 'above'}
+        onBubbleClick={bubble && bubble.kind !== 'emoji' ? () => setChatOpen(true) : undefined}
       />
     );
   };
@@ -627,72 +664,63 @@ export function KizmaBiraderGame({ user }: Props) {
         Sıra Sende! 🎲
       </Box>
 
-      {/* Mesaj toast balonu */}
-      {toastMsg && (
-        <Box
-          position="fixed"
-          bottom="150px"
-          left="50%"
-          transform="translateX(-50%)"
-          pointerEvents="none"
-          zIndex={65}
-          bg="surface.card"
-          borderRadius="2xl"
-          px={4} py={2.5}
-          borderWidth="1px"
-          borderColor="border.subtle"
-          boxShadow="0 8px 32px rgba(0,0,0,0.28)"
-          maxW="260px"
-          w="max-content"
-        >
-          <Text fontSize="2xs" color="text.muted" fontWeight="600" mb={0.5}>{toastMsg.displayName}</Text>
-          <Text fontSize="sm" fontWeight="600">{toastMsg.type === 'voice' ? '🎤 Sesli mesaj' : toastMsg.text}</Text>
-        </Box>
-      )}
-
       {/* Chat backdrop */}
       {chatOpen && (
-        <Box position="fixed" inset={0} zIndex={49} onClick={() => setChatOpen(false)} />
+        <Box position="fixed" inset={0} zIndex={49} bg={{ base: 'rgba(0,0,0,0.35)', md: 'transparent' }} onClick={() => setChatOpen(false)} />
       )}
 
-      {/* Sohbet paneli */}
+      {/* Sohbet paneli — mobilde alt sheet, masaüstünde sağ panel */}
       <Box
         position="fixed"
-        right={chatOpen ? '0' : '-310px'}
-        top="64px"
-        bottom={0}
-        w="300px"
-        bg="surface.card"
-        borderLeftWidth="1px"
-        borderColor="border.subtle"
-        boxShadow="-4px 0 24px rgba(0,0,0,0.18)"
-        transition="right 0.28s ease"
         zIndex={50}
         display="flex"
         flexDir="column"
+        bg="surface.card"
+        left={{ base: 0, md: 'auto' }}
+        right={{ base: 0, md: chatOpen ? '0' : '-310px' }}
+        bottom={0}
+        top={{ base: 'auto', md: '64px' }}
+        h={{ base: '62vh', md: 'auto' }}
+        w={{ base: 'auto', md: '300px' }}
+        borderTopRadius={{ base: '2xl', md: '0' }}
+        borderTopWidth="1px"
+        borderLeftWidth={{ base: 0, md: '1px' }}
+        borderColor="border.subtle"
+        boxShadow={{ base: '0 -10px 36px rgba(0,0,0,0.35)', md: '-4px 0 24px rgba(0,0,0,0.18)' }}
+        transition="transform 0.28s ease, right 0.28s ease"
+        transform={{ base: chatOpen ? 'translateY(0)' : 'translateY(110%)', md: 'none' }}
       >
-        <HStack justify="space-between" px={4} py={3} borderBottomWidth="1px" borderColor="border.subtle">
+        {/* Sürükleme çubuğu görseli (mobil) */}
+        <Box display={{ base: 'flex', md: 'none' }} justifyContent="center" pt={2}>
+          <Box w="36px" h="4px" borderRadius="full" bg="border.subtle" />
+        </Box>
+        <HStack justify="space-between" px={4} py={2.5} borderBottomWidth="1px" borderColor="border.subtle">
           <Text fontWeight="700" fontSize="sm">Sohbet</Text>
           <Button size="xs" variant="ghost" onClick={() => setChatOpen(false)}>✕</Button>
         </HStack>
         <Box flex={1} overflowY="auto" px={3} py={2} display="flex" flexDir="column" gap={2}>
-          {messages.map((m, i) => (
-            <Box key={i}>
-              <Text fontSize="2xs" color="text.muted" mb={0.5}>
-                {m.displayName} · {new Date(m.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-              </Text>
-              <Box
-                bg={m.displayName === user.displayName ? 'brand.500' : 'surface.subtle'}
-                color={m.displayName === user.displayName ? 'white' : undefined}
-                px={3} py={1.5} borderRadius="lg" fontSize="sm" maxW="240px"
-                alignSelf={m.displayName === user.displayName ? 'flex-end' : 'flex-start'}
-              >
-                {m.type === 'voice' && m.audio
-                  ? <VoiceBubble audio={m.audio} mime={m.mime} dur={m.dur} />
-                  : m.text}
+          {messages.map((m, i) => {
+            const mine = m.displayName === user.displayName;
+            return (
+              <Box key={i} alignSelf={mine ? 'flex-end' : 'flex-start'} maxW="85%">
+                <Text fontSize="2xs" color="text.muted" mb={0.5} textAlign={mine ? 'right' : 'left'}>
+                  {m.displayName} · {new Date(m.ts).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                </Text>
+                <Box
+                  bg={mine ? 'brand.500' : 'surface.subtle'}
+                  color={mine ? 'white' : undefined}
+                  px={3} py={1.5} fontSize="sm"
+                  borderRadius="2xl"
+                  borderBottomRightRadius={mine ? 'sm' : '2xl'}
+                  borderBottomLeftRadius={mine ? '2xl' : 'sm'}
+                >
+                  {m.type === 'voice' && m.audio
+                    ? <VoiceBubble audio={m.audio} mime={m.mime} dur={m.dur} />
+                    : m.text}
+                </Box>
               </Box>
-            </Box>
-          ))}
+            );
+          })}
           <div ref={chatBottomRef} />
         </Box>
         {/* Hazır mesajlar */}
@@ -739,33 +767,118 @@ export function KizmaBiraderGame({ user }: Props) {
         </Box>
       </Box>
 
-      {/* Chat FAB */}
-      <Box position="fixed" bottom="20px" right="20px" zIndex={55}>
-        <Box position="relative" display="inline-flex">
-          <Button
-            borderRadius="full"
-            w="52px" h="52px" p={0}
-            fontSize="xl"
-            colorPalette="brand"
-            variant="solid"
-            onClick={() => setChatOpen((v) => !v)}
-            boxShadow="0 4px 18px rgba(0,0,0,0.28)"
-          >
-            💬
-          </Button>
-          {unread > 0 && (
+      {/* Emote şeridi backdrop — dışına dokununca kapanır */}
+      {emoteStripOpen && !chatOpen && (
+        <Box position="fixed" inset={0} zIndex={54} onClick={() => setEmoteStripOpen(false)} />
+      )}
+
+      {/* Sohbet dock'u: 😊 hızlı tepki · 🎤 bas-konuş · 💬 panel */}
+      {!chatOpen && (
+        <Box position="fixed" bottom="18px" right="16px" zIndex={55}>
+          {emoteStripOpen && (
             <Box
-              position="absolute" top="-4px" right="-4px"
-              bg="red.500" color="white" borderRadius="full"
-              w="20px" h="20px" fontSize="2xs" fontWeight="800"
-              display="flex" alignItems="center" justifyContent="center"
-              pointerEvents="none"
+              className="kb-emote-strip"
+              position="absolute"
+              bottom="calc(100% + 10px)"
+              right={0}
+              bg="rgba(20,24,32,0.92)"
+              backdropFilter="blur(10px)"
+              borderRadius="2xl"
+              borderWidth="1px"
+              borderColor="rgba(255,255,255,0.12)"
+              boxShadow="0 10px 36px rgba(0,0,0,0.45)"
+              p={2.5}
+              w="max-content"
+              maxW="80vw"
             >
-              {unread > 9 ? '9+' : unread}
+              <HStack gap={1} mb={2} justify="flex-end">
+                {EMOTE_LIST.map((e) => (
+                  <Button
+                    key={e} variant="ghost" fontSize="22px" w="40px" h="40px" p={0} borderRadius="full"
+                    _hover={{ bg: 'rgba(255,255,255,0.14)', transform: 'scale(1.15)' }}
+                    transition="transform 0.12s ease"
+                    onClick={() => handleEmote(e)}
+                    aria-label={`Tepki gönder: ${e}`}
+                  >
+                    {e}
+                  </Button>
+                ))}
+              </HStack>
+              <Box display="flex" flexWrap="wrap" gap="6px" justifyContent="flex-end">
+                {QUICK_REPLIES.map((t) => (
+                  <Button
+                    key={t} size="xs" variant="outline" borderRadius="full"
+                    fontSize="2xs" fontWeight="600" h="26px" px={2.5}
+                    color="white" borderColor="rgba(255,255,255,0.28)"
+                    _hover={{ bg: 'rgba(255,255,255,0.14)' }}
+                    onClick={() => handleQuickReply(t)}
+                  >
+                    {t}
+                  </Button>
+                ))}
+              </Box>
             </Box>
           )}
+
+          <HStack
+            gap={1}
+            bg="rgba(20,24,32,0.85)"
+            backdropFilter="blur(10px)"
+            borderRadius="full"
+            p="5px"
+            borderWidth="1px"
+            borderColor="rgba(255,255,255,0.12)"
+            boxShadow="0 6px 24px rgba(0,0,0,0.4)"
+          >
+            <Button
+              variant="ghost" w="42px" h="42px" p={0} borderRadius="full" fontSize="xl"
+              bg={emoteStripOpen ? 'rgba(255,255,255,0.14)' : 'transparent'}
+              _hover={{ bg: 'rgba(255,255,255,0.14)' }}
+              onClick={() => setEmoteStripOpen((v) => !v)}
+              aria-label="Hızlı tepki"
+            >
+              😊
+            </Button>
+            <Button
+              w={recording ? 'auto' : '42px'} h="42px" px={recording ? 3 : 0} borderRadius="full"
+              fontSize={recording ? 'sm' : 'xl'} fontWeight="800"
+              colorPalette={recording ? 'red' : undefined}
+              variant={recording ? 'solid' : 'ghost'}
+              _hover={{ bg: recording ? undefined : 'rgba(255,255,255,0.14)' }}
+              onPointerDown={(e) => { e.preventDefault(); startRec(); }}
+              onPointerUp={() => stopRec(false)}
+              onPointerLeave={() => stopRec(true)}
+              onContextMenu={(e) => e.preventDefault()}
+              title="Basılı tut: kaydet · Bırak: gönder · Dışarı kaydır: iptal"
+              style={{ touchAction: 'none' }}
+              aria-label="Sesli mesaj"
+            >
+              {recording ? `● ${recSecs}sn` : '🎤'}
+            </Button>
+            <Box position="relative" display="inline-flex">
+              <Button
+                variant="ghost" w="42px" h="42px" p={0} borderRadius="full" fontSize="xl"
+                _hover={{ bg: 'rgba(255,255,255,0.14)' }}
+                onClick={() => { setEmoteStripOpen(false); setChatOpen(true); }}
+                aria-label="Sohbeti aç"
+              >
+                💬
+              </Button>
+              {unread > 0 && (
+                <Box
+                  position="absolute" top="-2px" right="-2px"
+                  bg="red.500" color="white" borderRadius="full"
+                  w="18px" h="18px" fontSize="2xs" fontWeight="800"
+                  display="flex" alignItems="center" justifyContent="center"
+                  pointerEvents="none"
+                >
+                  {unread > 9 ? '9+' : unread}
+                </Box>
+              )}
+            </Box>
+          </HStack>
         </Box>
-      </Box>
+      )}
 
       <VStack className="kb-stack" gap={2} align="center" w="full">
         {error && (

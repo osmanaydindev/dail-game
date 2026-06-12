@@ -151,6 +151,28 @@
 }
 .kb-slot-glow { animation: kb-slot-pulse 1.2s ease-out infinite; }
 
+/* ─── Kızma Birader: sohbet — emote pop, konuşma balonu, emote şeridi ─────── */
+@keyframes kb-emote-pop {
+  0% { transform: translateX(-50%) scale(0.2) translateY(6px); opacity: 0; }
+  12% { transform: translateX(-50%) scale(1.25) translateY(0); opacity: 1; }
+  20% { transform: translateX(-50%) scale(1); }
+  78% { transform: translateX(-50%) scale(1) translateY(-4px); opacity: 1; }
+  100% { transform: translateX(-50%) scale(0.9) translateY(-14px); opacity: 0; }
+}
+.kb-emote { animation: kb-emote-pop 3s ease-out forwards; }
+
+@keyframes kb-bubble-in {
+  from { transform: translateY(4px) scale(0.95); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.kb-speech { animation: kb-bubble-in 0.2s ease-out; }
+
+@keyframes kb-strip-pop {
+  from { transform: translateY(8px) scale(0.92); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.kb-emote-strip { animation: kb-strip-pop 0.18s ease-out; }
+
 /* ─── Kızma Birader: yatay telefonda immersive (Tavla deseni) ─────────────── */
 @media (orientation: landscape) and (max-height: 500px) {
   .kb-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -200,5 +222,8 @@
   .ao-fade-up,
   .ao-spin-slow,
   .kb-die-rolling,
-  .kb-slot-glow { animation: none !important; }
+  .kb-slot-glow,
+  .kb-emote,
+  .kb-speech,
+  .kb-emote-strip { animation: none !important; }
 }

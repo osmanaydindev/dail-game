@@ -23,6 +23,11 @@ const VOICE_MAX_BYTES = 300 * 1024; // ~15 sn @ 32kbps opus'a bolca yeter
 const VOICE_MIN_INTERVAL_MS = 2500; // kullanıcı başına hız limiti
 const lastVoiceAt = new Map<string, number>(); // userId -> son ses ts
 
+// Emote (tek dokunuş tepki) — geçmişe yazılmaz, anlık yayınlanır
+const EMOTES = new Set(['😂', '😡', '👍', '😭', '🎉', '😎']);
+const EMOTE_MIN_INTERVAL_MS = 1000;
+const lastEmoteAt = new Map<string, number>(); // userId -> son emote ts
+
 /** Oyuncunun göreceği sohbet geçmişi: kendi odaya girişinden sonrası. */
 function messagesFor(room: KizmaRoom, joinedAt: number): ChatMessage[] {
   return (room.messages ?? []).filter((m) => m.ts >= joinedAt);
@@ -66,6 +71,9 @@ export function attachKizmaBiraderSocket(io: Server): void {
     const cutoff = Date.now() - 60 * 60 * 1000;
     for (const [userId, ts] of lastVoiceAt) {
       if (ts < cutoff) lastVoiceAt.delete(userId);
+    }
+    for (const [userId, ts] of lastEmoteAt) {
+      if (ts < cutoff) lastEmoteAt.delete(userId);
     }
   }, 10 * 60 * 1000).unref();
 
@@ -283,6 +291,18 @@ export function attachKizmaBiraderSocket(io: Server): void {
       room.messages.push(msg);
       trimMessages(room);
       nsp.to(room.code).emit('kizma:message', msg);
+    });
+
+    // ── Emote: tek dokunuş tepki (geçmişe yazılmaz) ───────────────────────────────
+    socket.on('kizma:emote', ({ emoji }: { emoji: string }) => {
+      const room = getRoomBySocketId(socket.id);
+      if (!room?.state || !EMOTES.has(emoji)) return;
+      const player = room.players.find((p) => p.socketId === socket.id);
+      if (!player) return;
+      const now = Date.now();
+      if (now - (lastEmoteAt.get(player.userId) ?? 0) < EMOTE_MIN_INTERVAL_MS) return;
+      lastEmoteAt.set(player.userId, now);
+      nsp.to(room.code).emit('kizma:emote', { emoji, displayName: player.displayName, ts: now });
     });
 
     // ── Sohbet: sesli mesaj ───────────────────────────────────────────────────────

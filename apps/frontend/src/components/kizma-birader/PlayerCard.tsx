@@ -7,6 +7,11 @@ import { BOARD_TINT } from './types';
 import { DiePips } from './DiePips';
 import { CrownIcon } from './CrownIcon';
 
+export interface CardBubble {
+  content: string;
+  kind: 'emoji' | 'text' | 'voice';
+}
+
 interface PlayerCardProps {
   name: string;
   avatarUrl?: string;
@@ -19,11 +24,16 @@ interface PlayerCardProps {
   rollingFace: number;
   onRollTap?: () => void;
   align: 'left' | 'right';
+  // Sohbet balonu / emote — gönderenin kartına bitişik belirir
+  bubble?: CardBubble | null;
+  bubblePlacement?: 'above' | 'below';
+  onBubbleClick?: () => void;
 }
 
 export function PlayerCard({
   name, avatarUrl, color, finished, isTurn, canRoll,
   dieFace, rolling, rollingFace, onRollTap, align,
+  bubble, bubblePlacement = 'above', onBubbleClick,
 }: PlayerCardProps) {
   const tint = BOARD_TINT[color];
 
@@ -48,9 +58,14 @@ export function PlayerCard({
     p: '4px',
   } as const;
 
+  const placementStyle = bubblePlacement === 'above'
+    ? { bottom: 'calc(100% + 6px)' }
+    : { top: 'calc(100% + 6px)' };
+
   return (
     <Box
       className="kb-player-card"
+      position="relative"
       borderRadius="xl"
       px={3}
       py={2}
@@ -62,6 +77,53 @@ export function PlayerCard({
         textShadow: '0 1px 2px rgba(0,0,0,0.5)',
       }}
     >
+      {/* Sohbet balonu / emote — kartın üstünde veya altında belirir */}
+      {bubble && bubble.kind === 'emoji' && (
+        <Box
+          key={`${bubble.content}`}
+          className="kb-emote"
+          position="absolute"
+          left="50%"
+          zIndex={30}
+          pointerEvents="none"
+          fontSize="34px"
+          lineHeight="1"
+          style={{ ...placementStyle, transform: 'translateX(-50%)', textShadow: 'none' }}
+        >
+          {bubble.content}
+        </Box>
+      )}
+      {bubble && bubble.kind !== 'emoji' && (
+        <Box
+          className="kb-speech"
+          position="absolute"
+          left={align === 'left' ? '8px' : 'auto'}
+          right={align === 'right' ? '8px' : 'auto'}
+          zIndex={30}
+          bg="white"
+          color="#1a1f27"
+          px={2.5} py={1.5}
+          borderRadius="lg"
+          maxW="180px"
+          boxShadow="0 4px 14px rgba(0,0,0,0.3)"
+          cursor={onBubbleClick ? 'pointer' : 'default'}
+          onClick={onBubbleClick}
+          style={{ ...placementStyle, textShadow: 'none' }}
+        >
+          <Text fontSize="xs" fontWeight="600" lineClamp={2}>{bubble.content}</Text>
+          {/* Kuyruk */}
+          <Box
+            position="absolute"
+            left="14px"
+            w="0" h="0"
+            style={
+              bubblePlacement === 'above'
+                ? { top: '100%', borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderTop: '7px solid white' }
+                : { bottom: '100%', borderLeft: '6px solid transparent', borderRight: '6px solid transparent', borderBottom: '7px solid white' }
+            }
+          />
+        </Box>
+      )}
       <HStack justify="space-between" mb={1.5} flexDirection={align === 'right' ? 'row-reverse' : 'row'}>
         <Text fontSize="xs" fontWeight="800" truncate maxW="80%">{name}</Text>
         <Text fontSize="2xs" fontWeight="700" bg="rgba(0,0,0,0.3)" borderRadius="md" px={1.5} py={0.5}>
