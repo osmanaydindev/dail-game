@@ -28,6 +28,20 @@ function starPoints(cx: number, cy: number, ro = 0.36, ri = 0.15): string {
   return pts.join(' ');
 }
 
+// Piyon gövdesi — boyundan tabana genişleyen silüet (merkez (0,0) hücre ortası).
+const PAWN_BODY = 'M -0.085 -0.14 C -0.10 0.02 -0.20 0.12 -0.24 0.26 L 0.24 0.26 C 0.20 0.12 0.10 0.02 0.085 -0.14 Z';
+
+/** Piyonun baş + gövde + taban parçaları; dolgu dışarıdan verilir (kontur/renk/gradyan katmanları). */
+function PawnShape() {
+  return (
+    <>
+      <circle cx={0} cy={-0.24} r={0.15} />
+      <path d={PAWN_BODY} />
+      <ellipse cx={0} cy={0.26} rx={0.27} ry={0.1} />
+    </>
+  );
+}
+
 // Ev sütunu giriş hücresindeki (HOME_PATH[c][0]) merkeze bakan beyaz ok.
 const HOME_ARROW: Record<KizmaColor, string> = {
   red: '1.28,7.2 1.78,7.5 1.28,7.8',
@@ -274,27 +288,40 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
         <rect x={6} y={6} width={3} height={3} fill="none" stroke="#3a4150" strokeWidth={0.05} />
       </g>
 
-      {/* Taşlar */}
+      {/* Taşlar — piyon silüeti (baş + gövde + taban) */}
       {tokenNodes.map((n) => {
         const fill = COLOR_HEX[n.color];
         return (
           <g
             key={`tok-${n.color}-${n.id}`}
+            transform={`translate(${n.x} ${n.y})`}
             onClick={() => n.movable && onTokenClick(n.color, n.id)}
             style={{ cursor: n.movable ? 'pointer' : 'default' }}
           >
+            {/* Geniş görünmez tıklama alanı */}
+            <circle cx={0} cy={0} r={0.46} fill="transparent" />
             {n.movable && (
-              <circle cx={n.x} cy={n.y} r={0.46} fill="none" stroke="#22c55e" strokeWidth={0.12}>
+              <circle cx={0} cy={0} r={0.46} fill="none" stroke="#22c55e" strokeWidth={0.12}>
                 <animate attributeName="r" values="0.40;0.50;0.40" dur="1.1s" repeatCount="indefinite" />
                 <animate attributeName="opacity" values="1;0.45;1" dur="1.1s" repeatCount="indefinite" />
               </circle>
             )}
-            {/* Taşın altında merkezli yumuşak gölge */}
-            <ellipse cx={n.x} cy={n.y + 0.3} rx={0.26} ry={0.1} fill="rgba(0,0,0,0.20)" />
-            <circle cx={n.x} cy={n.y} r={0.34} fill={fill} stroke="#ffffff" strokeWidth={0.07} />
-            {/* Işık */}
-            <circle cx={n.x} cy={n.y} r={0.32} fill={`url(#kb-tok-${n.color})`} />
-            <circle cx={n.x} cy={n.y - 0.08} r={0.11} fill="#ffffff" opacity={0.45} />
+            {/* Zemin gölgesi */}
+            <ellipse cx={0} cy={0.34} rx={0.27} ry={0.09} fill="rgba(0,0,0,0.20)" />
+            {/* Beyaz dış kontur — silüet bir kez beyaz dolgu+konturla çizilir, eklem izleri görünmez */}
+            <g fill="#ffffff" stroke="#ffffff" strokeWidth={0.07} strokeLinejoin="round">
+              <PawnShape />
+            </g>
+            {/* Renkli gövde */}
+            <g fill={fill}>
+              <PawnShape />
+            </g>
+            {/* Hacim gradyanı */}
+            <g fill={`url(#kb-tok-${n.color})`}>
+              <PawnShape />
+            </g>
+            {/* Baş parlaması */}
+            <circle cx={-0.05} cy={-0.28} r={0.05} fill="#ffffff" opacity={0.55} />
           </g>
         );
       })}
