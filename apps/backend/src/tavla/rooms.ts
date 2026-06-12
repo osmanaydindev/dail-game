@@ -13,11 +13,14 @@ export interface Room {
   players: RoomPlayer[];
   state: GameState | null;
   createdAt: number;
+  // Son oyuncu eylemi — eskime buna göre ölçülür (createdAt'e göre değil).
+  lastActivity: number;
 }
 
 const rooms = new Map<string, Room>();
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const STALE_MS = 2 * 60 * 60 * 1000;
+const IDLE_STALE_MS = 2 * 60 * 60 * 1000;
+const ENDED_TTL_MS = 10 * 60 * 1000;
 
 function generateCode(): string {
   let code = '';
@@ -25,13 +28,18 @@ function generateCode(): string {
   return code;
 }
 
-function cleanup(): void {
+/** Biten (kısa TTL) ve hareketsiz odaları RAM'den düşürür. */
+export function sweepRooms(): void {
   const now = Date.now();
-  for (const [k, r] of rooms) if (now - r.createdAt > STALE_MS) rooms.delete(k);
+  for (const [k, r] of rooms) {
+    const idle = now - r.lastActivity;
+    const ended = r.state?.winner != null;
+    if ((ended && idle > ENDED_TTL_MS) || idle > IDLE_STALE_MS) rooms.delete(k);
+  }
 }
 
 export function createRoom(userId: string, displayName: string, socketId: string): Room {
-  cleanup();
+  sweepRooms();
   let code: string;
   do { code = generateCode(); } while (rooms.has(code));
   const room: Room = {
@@ -39,6 +47,7 @@ export function createRoom(userId: string, displayName: string, socketId: string
     players: [{ userId, displayName, socketId, color: 'white', connected: true }],
     state: null,
     createdAt: Date.now(),
+    lastActivity: Date.now(),
   };
   rooms.set(code, room);
   return room;
@@ -52,6 +61,7 @@ export function joinRoom(
   if (room.players.filter(p => p.connected).length >= 2) return null;
   if (room.players[0].userId === userId) return null;
   room.players.push({ userId, displayName, socketId, color: 'black', connected: true });
+  room.lastActivity = Date.now();
   return room;
 }
 
@@ -62,12 +72,17 @@ export function rejoinRoom(code: string, userId: string, socketId: string): Room
   if (!player) return null;
   player.socketId = socketId;
   player.connected = true;
+  room.lastActivity = Date.now();
   return room;
 }
 
 export function getRoomBySocketId(socketId: string): Room | undefined {
   for (const room of rooms.values()) {
-    if (room.players.some(p => p.socketId === socketId)) return room;
+    if (room.players.some(p => p.socketId === socketId)) {
+      // Her oyuncu eylemi buradan geçer — aktivite damgasını tazele.
+      room.lastActivity = Date.now();
+      return room;
+    }
   }
 }
 

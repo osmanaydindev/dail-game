@@ -49,13 +49,17 @@ export interface KizmaRoom {
   players: KizmaPlayer[];
   state: KizmaGameState | null;
   createdAt: number;
+  // Son oyuncu eylemi (hamle/zar/mesaj/bağlantı). Eskime buna göre ölçülür —
+  // createdAt'e göre değil; 2 saati aşan AKTİF oyun yanlışlıkla silinmez.
+  lastActivity: number;
   messages: ChatMessage[];
   locked?: boolean;
 }
 
 const rooms = new Map<string, KizmaRoom>();
 const CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-const STALE_MS = 2 * 60 * 60 * 1000;
+const IDLE_STALE_MS = 2 * 60 * 60 * 1000; // hareketsiz oda ömrü
+const ENDED_TTL_MS = 10 * 60 * 1000; // biten oyunun odası (sohbet/ses dahil) bu süre sonra silinir
 const MAX_PLAYERS = 4;
 
 function generateCode(): string {
@@ -64,15 +68,22 @@ function generateCode(): string {
   return code;
 }
 
-function cleanup(): void {
+/** Süpürme: boş, bitmiş (kısa TTL) ve hareketsiz odaları RAM'den düşürür.
+ *  Periyodik interval'dan ve createRoom'dan çağrılır. */
+export function sweepRooms(): void {
   const now = Date.now();
-  for (const [k, r] of rooms) if (now - r.createdAt > STALE_MS) rooms.delete(k);
+  for (const [k, r] of rooms) {
+    const idle = now - r.lastActivity;
+    const empty = r.players.length === 0;
+    const ended = r.state?.winner != null;
+    if (empty || (ended && idle > ENDED_TTL_MS) || idle > IDLE_STALE_MS) rooms.delete(k);
+  }
 }
 
 export function createRoom(
   userId: string, displayName: string, socketId: string, avatarUrl?: string,
 ): KizmaRoom {
-  cleanup();
+  sweepRooms();
   let code: string;
   do { code = generateCode(); } while (rooms.has(code));
   const room: KizmaRoom = {
@@ -80,6 +91,7 @@ export function createRoom(
     players: [{ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: true, joinedAt: Date.now() }],
     state: null,
     createdAt: Date.now(),
+    lastActivity: Date.now(),
     messages: [],
   };
   rooms.set(code, room);
@@ -92,6 +104,7 @@ export function joinRoom(
   const room = rooms.get(code.toUpperCase());
   if (!room) return { room: null as unknown as KizmaRoom, error: 'Oda bulunamadı.' };
   if (room.state) return { room: null as unknown as KizmaRoom, error: 'Oyun zaten başladı.' };
+  room.lastActivity = Date.now();
   // Aynı kullanıcı tekrar katılıyorsa socket'i güncelle (sekme yenileme/2. giriş)
   const existing = room.players.find((p) => p.userId === userId);
   if (existing) {
@@ -141,7 +154,11 @@ export function getRoom(code: string): KizmaRoom | undefined {
 
 export function getRoomBySocketId(socketId: string): KizmaRoom | undefined {
   for (const room of rooms.values()) {
-    if (room.players.some((p) => p.socketId === socketId)) return room;
+    if (room.players.some((p) => p.socketId === socketId)) {
+      // Her oyuncu eylemi buradan geçer — odanın aktivite damgasını tazele.
+      room.lastActivity = Date.now();
+      return room;
+    }
   }
   return undefined;
 }
@@ -153,6 +170,7 @@ export function rejoinRoom(code: string, userId: string, socketId: string): Kizm
   if (!player) return null;
   player.socketId = socketId;
   player.connected = true;
+  room.lastActivity = Date.now();
   return room;
 }
 
@@ -161,6 +179,7 @@ export function disconnectPlayer(socketId: string): { room: KizmaRoom; player: K
     const player = room.players.find((p) => p.socketId === socketId);
     if (player) {
       player.connected = false;
+      room.lastActivity = Date.now();
       // Oyun başlamadıysa oyuncuyu odadan tamamen çıkar (lobby temiz kalsın)
       if (!room.state) {
         room.players = room.players.filter((p) => p.socketId !== socketId);
@@ -168,6 +187,8 @@ export function disconnectPlayer(socketId: string): { room: KizmaRoom; player: K
         if (player.isHost && room.players.length > 0 && !room.players.some((p) => p.isHost)) {
           room.players[0].isHost = true;
         }
+        // Lobby tamamen boşaldıysa odayı hemen düşür (RAM'de bekletme)
+        if (room.players.length === 0) rooms.delete(room.code);
       }
       return { room, player };
     }

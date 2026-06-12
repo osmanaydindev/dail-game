@@ -2,7 +2,7 @@ import { Server } from 'socket.io';
 import type { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
-import { createRoom, joinRoom, rejoinRoom, getRoomBySocketId, disconnectPlayer } from './rooms';
+import { createRoom, joinRoom, rejoinRoom, getRoomBySocketId, disconnectPlayer, sweepRooms } from './rooms';
 import {
   createInitialState, rollDice, applyRoll, getLegalMoves, applyMove,
 } from './engine';
@@ -32,6 +32,9 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
       next(new Error('Invalid token'));
     }
   });
+
+  // Periyodik temizlik: biten/hareketsiz Tavla odaları RAM'den düşer.
+  setInterval(() => { sweepRooms(); }, 10 * 60 * 1000).unref();
 
   // ── Connection handler ─────────────────────────────────────────────────────
   io.on('connection', (socket) => {

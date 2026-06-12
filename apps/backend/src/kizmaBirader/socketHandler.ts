@@ -8,7 +8,7 @@ import { env } from '../config/env';
 import { User } from '../models/User';
 import {
   createRoom, joinRoom, selectColor, setReady, rejoinRoom,
-  getRoomBySocketId, disconnectPlayer, getRoom, trimMessages,
+  getRoomBySocketId, disconnectPlayer, getRoom, trimMessages, sweepRooms,
 } from './rooms';
 import type { KizmaRoom, ChatMessage } from './rooms';
 import {
@@ -58,6 +58,16 @@ function emitState(nsp: Namespace, room: KizmaRoom): void {
 
 export function attachKizmaBiraderSocket(io: Server): void {
   const nsp = io.of('/kizma');
+
+  // Periyodik temizlik: biten/boş/hareketsiz odalar (ses kayıtları dahil) RAM'den
+  // düşer; ses hız-limiti haritasındaki eski kayıtlar da budanır.
+  setInterval(() => {
+    sweepRooms();
+    const cutoff = Date.now() - 60 * 60 * 1000;
+    for (const [userId, ts] of lastVoiceAt) {
+      if (ts < cutoff) lastVoiceAt.delete(userId);
+    }
+  }, 10 * 60 * 1000).unref();
 
   // ── Auth (Tavla ile aynı JWT deseni) ──────────────────────────────────────
   nsp.use(async (socket, next) => {
