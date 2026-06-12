@@ -92,21 +92,25 @@ Güvenli global hücreler = { 0, 8, 13, 21, 26, 34, 39, 47 }
 
 - `{0, 13, 26, 39}` = renklerin start hücreleri.
 - `{8, 21, 34, 47}` = klasik "yıldız" hücreleri (her start + 8).
+- Güvenli karelere **herkes gidebilir, sınırsız sayıda taş** bir arada durabilir;
+  blok kuralı (Bölüm 7) güvenli karelerde **işlemez**.
 
 ## 7. Kendi Taşlarının Aynı Karede Durması (Stacking / Block)
 
 **Karar:** Aynı renkten taşlar **aynı karede üst üste durabilir** (stack serbest).
 
-- Bir karede aynı renkten **2 veya daha fazla** taş varsa, bu kare bir **blok**
-  oluşturur: rakip taş bu kareye **gelemez** (hamle geçersizdir) ve bu taşlar
-  kırılamaz.
+- **Güvenli olmayan** bir karede aynı renkten **2 veya daha fazla** taş varsa, bu
+  kare bir **blok** oluşturur: rakip taş bu kareye **gelemez** (hamle geçersizdir)
+  ve bu taşlar kırılamaz.
 - Bir karede rakibe ait **tek** taş varsa ve kare güvenli değilse, gelen taş onu
   kırar.
-- Güvenli karede birden fazla farklı renk taş bir arada durabilir; blok kuralı
-  güvenli karede kırmayı yine de engeller.
+- **Güvenli karelerde blok kuralı işlemez**: rakip kaç taş olursa olsun herkes
+  güvenli kareye inebilir, sınırsız sayıda taş bir arada durabilir ve güvenli
+  karede kırma zaten yoktur.
 
-> Özet: Kendi taşların serbestçe üst üste binebilir; iki+ taşlık yığın rakip için
-> aşılmaz bir blok ve kırılmaz bir bütündür.
+> Özet: Kendi taşların serbestçe üst üste binebilir; güvenli olmayan karedeki
+> iki+ taşlık yığın rakip için aşılmaz bir blok ve kırılmaz bir bütündür.
+> Güvenli kareler ise herkese açıktır.
 
 ## 8. Kazanma
 

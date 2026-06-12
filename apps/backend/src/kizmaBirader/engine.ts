@@ -131,10 +131,11 @@ export function getLegalMoves(state: KizmaGameState): KizmaMove[] {
     const newPos = token.pos + die;
     if (newPos > GOAL_POS) continue; // overshoot — tam sayı gerekir
 
-    // Halkada kalıyorsa blok kontrolü; home sütununa giriyorsa kontrol yok (özel)
+    // Halkada kalıyorsa blok kontrolü; home sütununa giriyorsa kontrol yok (özel).
+    // Güvenli karelerde blok kuralı işlemez: herkes inebilir, sınırsız taş durabilir.
     if (newPos <= LAST_RING_POS) {
       const g = globalCell(color, newPos)!;
-      if (isBlockedForOpponent(state, g, color)) continue;
+      if (!SAFE_GLOBAL.has(g) && isBlockedForOpponent(state, g, color)) continue;
     }
     moves.push({ color, tokenId: token.id, die });
   }
