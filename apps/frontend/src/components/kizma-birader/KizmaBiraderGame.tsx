@@ -715,19 +715,28 @@ export function KizmaBiraderGame({ user }: Props) {
           {renderCard('yellow', 'right')}
         </SimpleGrid>
 
-        {/* Aksiyon şeridi — durum pill'i */}
+        {/* Aksiyon şeridi — durum pill'i (sıra sende + zar bekleniyorsa butona dönüşür) */}
         <HStack className="kb-actions" gap={3} align="center" px={2} wrap="wrap" justify="center" pb={4}>
-          <Box
-            px={3} py={1.5} borderRadius="full"
-            transition="background 0.2s ease"
-            style={{
-              background: isMyTurn ? '#38a169' : 'var(--chakra-colors-surface-subtle)',
-            }}
-          >
-            <Text fontSize="sm" fontWeight="700" className="kb-status" style={{ color: isMyTurn ? 'white' : 'var(--chakra-colors-text-muted)' }}>
-              {statusMsg()}
-            </Text>
-          </Box>
+          {(() => {
+            const pillRolls = isMyTurn && gameState.phase === 'rolling' && !diceAnim;
+            return (
+              <Box
+                as={pillRolls ? 'button' : 'div'}
+                onClick={pillRolls ? handleRoll : undefined}
+                cursor={pillRolls ? 'pointer' : 'default'}
+                px={3} py={1.5} borderRadius="full"
+                transition="background 0.2s ease"
+                style={{
+                  background: isMyTurn ? '#38a169' : 'var(--chakra-colors-surface-subtle)',
+                  boxShadow: pillRolls ? '0 2px 12px rgba(56,161,105,0.55)' : 'none',
+                }}
+              >
+                <Text fontSize="sm" fontWeight="700" className="kb-status" style={{ color: isMyTurn ? 'white' : 'var(--chakra-colors-text-muted)' }}>
+                  {pillRolls ? '🎲 ' : ''}{statusMsg()}
+                </Text>
+              </Box>
+            );
+          })()}
           {gameState.winner && (
             <Button colorPalette="brand" onClick={() => leaveToHome(true)}>Yeni Oyun</Button>
           )}
