@@ -69,45 +69,24 @@ function VoiceBubble({ audio, mime, dur }: { audio: ArrayBuffer; mime?: string; 
 }
 
 // ── Web Audio sesler ──────────────────────────────────────────────────────────
+// Gerçek zar atışı kayıtları (Kenney Casino Audio, CC0). 3 varyasyon — her
+// atışta rastgele biri çalınır, tekrara binmez.
+const DICE_SOUND_URLS = ['/sounds/die-throw-1.wav', '/sounds/die-throw-2.wav', '/sounds/die-throw-3.wav'];
+let diceAudioCache: HTMLAudioElement[] | null = null;
+
 function playDiceSound() {
   try {
-    const ctx = new AudioContext();
-    // Zar masaya düşüp sekiyor: tok ilk vuruş + sönerek sıklaşan sekmeler.
-    // Her vuruş = pes inen sinüs gövde (tok "güm") + kısa boğuk plastik tıkı.
-    const knocks: [number, number][] = [[0, 1], [0.11, 0.55], [0.19, 0.3], [0.255, 0.15]];
-    knocks.forEach(([t, vol]) => {
-      const at = ctx.currentTime + t;
-      const osc = ctx.createOscillator();
-      const og = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(170, at);
-      osc.frequency.exponentialRampToValueAtTime(60, at + 0.08);
-      og.gain.setValueAtTime(0.85 * vol, at);
-      og.gain.exponentialRampToValueAtTime(0.001, at + 0.12);
-      osc.connect(og);
-      og.connect(ctx.destination);
-      osc.start(at);
-      osc.stop(at + 0.14);
-
-      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.03), ctx.sampleRate);
-      const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) {
-        data[i] = (Math.random() * 2 - 1) * Math.exp(-(i / data.length) * 6);
-      }
-      const src = ctx.createBufferSource();
-      src.buffer = buf;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'lowpass';
-      filter.frequency.value = 1400;
-      filter.Q.value = 0.7;
-      const ng = ctx.createGain();
-      ng.gain.setValueAtTime(0.45 * vol, at);
-      src.connect(filter);
-      filter.connect(ng);
-      ng.connect(ctx.destination);
-      src.start(at);
-    });
-    setTimeout(() => ctx.close(), 700);
+    if (!diceAudioCache) {
+      diceAudioCache = DICE_SOUND_URLS.map((src) => {
+        const a = new Audio(src);
+        a.preload = 'auto';
+        return a;
+      });
+    }
+    const a = diceAudioCache[Math.floor(Math.random() * diceAudioCache.length)];
+    a.currentTime = 0;
+    a.volume = 0.85;
+    void a.play().catch(() => {});
   } catch {}
 }
 
