@@ -72,19 +72,40 @@ function VoiceBubble({ audio, mime, dur }: { audio: ArrayBuffer; mime?: string; 
 function playDiceSound() {
   try {
     const ctx = new AudioContext();
-    const times = [0, 0.06, 0.12, 0.20, 0.29, 0.38, 0.49, 0.54];
-    times.forEach((t) => {
-      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.025), ctx.sampleRate);
+    // Zar masaya düşüp sekiyor: tok ilk vuruş + sönerek sıklaşan sekmeler.
+    // Her vuruş = pes inen sinüs gövde (tok "güm") + kısa boğuk plastik tıkı.
+    const knocks: [number, number][] = [[0, 1], [0.11, 0.55], [0.19, 0.3], [0.255, 0.15]];
+    knocks.forEach(([t, vol]) => {
+      const at = ctx.currentTime + t;
+      const osc = ctx.createOscillator();
+      const og = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(170, at);
+      osc.frequency.exponentialRampToValueAtTime(60, at + 0.08);
+      og.gain.setValueAtTime(0.85 * vol, at);
+      og.gain.exponentialRampToValueAtTime(0.001, at + 0.12);
+      osc.connect(og);
+      og.connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.14);
+
+      const buf = ctx.createBuffer(1, Math.ceil(ctx.sampleRate * 0.03), ctx.sampleRate);
       const data = buf.getChannelData(0);
-      for (let i = 0; i < data.length; i++) data[i] = (Math.random() * 2 - 1) * 0.6;
+      for (let i = 0; i < data.length; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-(i / data.length) * 6);
+      }
       const src = ctx.createBufferSource();
       src.buffer = buf;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(0.5, ctx.currentTime + t);
-      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + t + 0.025);
-      src.connect(gain);
-      gain.connect(ctx.destination);
-      src.start(ctx.currentTime + t);
+      const filter = ctx.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 1400;
+      filter.Q.value = 0.7;
+      const ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.45 * vol, at);
+      src.connect(filter);
+      filter.connect(ng);
+      ng.connect(ctx.destination);
+      src.start(at);
     });
     setTimeout(() => ctx.close(), 700);
   } catch {}
