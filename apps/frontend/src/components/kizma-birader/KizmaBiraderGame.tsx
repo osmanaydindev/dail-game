@@ -7,6 +7,7 @@ import {
 import type { Socket } from 'socket.io-client';
 import { createKizmaBiraderSocket } from '@/lib/socket';
 import { KizmaBoard } from './KizmaBoard';
+import { PlayerCard } from './PlayerCard';
 import {
   KIZMA_COLORS, COLOR_HEX, COLOR_LABEL_TR,
 } from './types';
@@ -122,8 +123,6 @@ export function KizmaBiraderGame({ user }: Props) {
   const myColorRef = useRef<KizmaColor | null>(null);
   const gameStateRef = useRef<KizmaGameState | null>(null);
   const legalMovesRef = useRef<KizmaMove[]>([]);
-  const diceAnimRef = useRef(false);
-  const pendingStateRef = useRef<{ state: KizmaGameState; legalMoves: KizmaMove[] } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [screen, setScreen] = useState<Screen>('home');
@@ -136,7 +135,9 @@ export function KizmaBiraderGame({ user }: Props) {
   const [joinInput, setJoinInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [animDie, setAnimDie] = useState<number | null>(null);
+  // Zar animasyonu: hangi oyuncunun kartındaki yuvada döndüğü + o anki rastgele yüz.
+  const [diceAnim, setDiceAnim] = useState<{ by: KizmaColor; face: number } | null>(null);
+  const diceIvRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [showTurnNotif, setShowTurnNotif] = useState(false);
   const [timeLeft, setTimeLeft] = useState<number | null>(null);
 
@@ -221,19 +222,18 @@ export function KizmaBiraderGame({ user }: Props) {
     s.on('kizma:state', (p: { state: KizmaGameState; legalMoves: KizmaMove[] }) => {
       applyState(p);
     });
-
-    s.on('kizma:dice', ({ die: _die }: { die: number }) => {
+    s.on('kizma:dice', ({ by }: { die: number; by: KizmaColor }) => {
+      // Zar, atan oyuncunun kartındaki yuvada döner; sonuç kizma:state ile oturur.
       playDiceSound();
-      diceAnimRef.current = true;
+      if (diceIvRef.current) clearInterval(diceIvRef.current);
       let ticks = 0;
-      const iv = setInterval(() => {
-        setAnimDie(Math.ceil(Math.random() * 6));
+      setDiceAnim({ by, face: Math.ceil(Math.random() * 6) });
+      diceIvRef.current = setInterval(() => {
+        setDiceAnim({ by, face: Math.ceil(Math.random() * 6) });
         if (++ticks >= 8) {
-          clearInterval(iv);
-          setAnimDie(null);
-          diceAnimRef.current = false;
-          const pending = pendingStateRef.current;
-          if (pending) { pendingStateRef.current = null; applyState(pending); }
+          if (diceIvRef.current) clearInterval(diceIvRef.current);
+          diceIvRef.current = null;
+          setDiceAnim(null);
         }
       }, 70);
     });
@@ -266,7 +266,10 @@ export function KizmaBiraderGame({ user }: Props) {
       }
     });
 
-    return () => { s.disconnect(); };
+    return () => {
+      if (diceIvRef.current) clearInterval(diceIvRef.current);
+      s.disconnect();
+    };
   }, []);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -450,8 +453,33 @@ export function KizmaBiraderGame({ user }: Props) {
 
   const isMyTurn = gameState.turn === myColor && !gameState.winner;
   const nameOf = (c: KizmaColor) => gamePlayers.find((p) => p.color === c)?.displayName ?? c;
+  const avatarOf = (c: KizmaColor) => gamePlayers.find((p) => p.color === c)?.avatarUrl;
   const finishedCount = (c: KizmaColor) =>
     gameState.players.find((p) => p.color === c)?.tokens.filter((t) => t.pos === 57).length ?? 0;
+
+  const renderCard = (c: KizmaColor, align: 'left' | 'right') => {
+    if (!gameState.activeColors.includes(c)) return <Box key={c} />;
+    const rolling = diceAnim?.by === c;
+    const dieFace = !rolling && gameState.dice != null && gameState.turn === c ? gameState.dice : null;
+    const isTurn = gameState.turn === c && !gameState.winner;
+    const canRoll = isTurn && c === myColor && gameState.phase === 'rolling' && !rolling;
+    return (
+      <PlayerCard
+        key={c}
+        name={nameOf(c)}
+        avatarUrl={avatarOf(c)}
+        color={c}
+        finished={finishedCount(c)}
+        isTurn={isTurn}
+        canRoll={canRoll}
+        dieFace={dieFace}
+        rolling={rolling}
+        rollingFace={diceAnim?.face ?? 1}
+        onRollTap={handleRoll}
+        align={align}
+      />
+    );
+  };
 
   const statusMsg = () => {
     if (gameState.winner) return gameState.winner === myColor ? '🏆 Kazandın!' : `${nameOf(gameState.winner)} kazandı`;
@@ -463,7 +491,7 @@ export function KizmaBiraderGame({ user }: Props) {
   };
 
   return (
-    <Box position="relative" w="full" minH="60vh">
+    <Box className="kb-container" position="relative" w="full" minH="60vh">
       {/* Sıra sende bildirimi */}
       <Box
         position="fixed"
@@ -609,51 +637,26 @@ export function KizmaBiraderGame({ user }: Props) {
         </Box>
       </Box>
 
-      <VStack gap={3} align="center" w="full">
+      <VStack className="kb-stack" gap={2} align="center" w="full">
         {error && (
           <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
             <Alert.Indicator /><Alert.Title fontSize="sm">{error}</Alert.Title>
           </Alert.Root>
         )}
 
-        {/* Oyuncu şeridi — kart tasarımı */}
-        <HStack justify="center" gap={2} w="full" maxW={{ base: '100%', md: '640px' }} px={{ base: 3, md: 0 }} wrap="wrap">
-          {gameState.activeColors.map((c) => {
-            const active = gameState.turn === c;
-            const hex = COLOR_HEX[c];
-            return (
-              <Box
-                key={c}
-                px={2.5} py={1.5}
-                borderRadius="xl"
-                borderWidth="1.5px"
-                transition="all 0.25s ease"
-                style={{
-                  background: active ? `${hex}18` : 'transparent',
-                  borderColor: active ? hex : 'var(--chakra-colors-border-subtle)',
-                  boxShadow: active ? `0 0 14px ${hex}55` : 'none',
-                }}
-              >
-                <HStack gap={1.5}>
-                  <Box
-                    w="10px" h="10px" borderRadius="full"
-                    style={{ background: hex, boxShadow: active ? `0 0 6px ${hex}` : 'none' }}
-                  />
-                  <Text fontSize="xs" fontWeight={active ? '800' : '500'} opacity={active ? 1 : 0.55}>
-                    {nameOf(c)}
-                  </Text>
-                  <Text fontSize="2xs" color="text.muted" opacity={active ? 1 : 0.5}>
-                    {finishedCount(c)}/4
-                  </Text>
-                  {active && <Text fontSize="2xs" fontWeight="800" color="orange.300">▶</Text>}
-                </HStack>
-              </Box>
-            );
-          })}
-        </HStack>
+        {/* Üst köşe kartları — tahtadaki çeyreklerle aynı yerleşim */}
+        <SimpleGrid
+          className="kb-cards kb-cards-top"
+          columns={2} gap={2} w="full"
+          maxW={{ base: '100vw', md: '560px' }} px={{ base: 2, md: 0 }}
+        >
+          {renderCard('red', 'left')}
+          {renderCard('blue', 'right')}
+        </SimpleGrid>
 
         {/* Board */}
         <Box
+          className="kb-board-wrap"
           position="relative"
           w="full" maxW={{ base: '100vw', md: '560px' }}
           aspectRatio={1} mx="auto"
@@ -666,7 +669,6 @@ export function KizmaBiraderGame({ user }: Props) {
             legalMoves={legalMoves}
             isMyTurn={isMyTurn}
             onTokenClick={handleTokenClick}
-            animDie={animDie}
             onStepSound={playMoveStepSound}
           />
           {/* Süre badge'i — yard kutusunun ortasında HTML overlay */}
@@ -703,9 +705,18 @@ export function KizmaBiraderGame({ user }: Props) {
           })()}
         </Box>
 
-        {/* Aksiyon şeridi */}
-        <HStack gap={3} align="center" px={2} wrap="wrap" justify="center" pb={4}>
-          {/* Durum pill */}
+        {/* Alt köşe kartları */}
+        <SimpleGrid
+          className="kb-cards kb-cards-bottom"
+          columns={2} gap={2} w="full"
+          maxW={{ base: '100vw', md: '560px' }} px={{ base: 2, md: 0 }}
+        >
+          {renderCard('white', 'left')}
+          {renderCard('yellow', 'right')}
+        </SimpleGrid>
+
+        {/* Aksiyon şeridi — durum pill'i */}
+        <HStack className="kb-actions" gap={3} align="center" px={2} wrap="wrap" justify="center" pb={4}>
           <Box
             px={3} py={1.5} borderRadius="full"
             transition="background 0.2s ease"
@@ -713,21 +724,10 @@ export function KizmaBiraderGame({ user }: Props) {
               background: isMyTurn ? '#38a169' : 'var(--chakra-colors-surface-subtle)',
             }}
           >
-            <Text fontSize="sm" fontWeight="700" style={{ color: isMyTurn ? 'white' : 'var(--chakra-colors-text-muted)' }}>
+            <Text fontSize="sm" fontWeight="700" className="kb-status" style={{ color: isMyTurn ? 'white' : 'var(--chakra-colors-text-muted)' }}>
               {statusMsg()}
             </Text>
           </Box>
-          {isMyTurn && gameState.phase === 'rolling' && (
-            <Button size="lg" onClick={handleRoll} border="none"
-              style={{
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                boxShadow: '0 4px 16px rgba(102,126,234,0.5)',
-              }}
-            >
-              🎲 Zar At
-            </Button>
-          )}
           {gameState.winner && (
             <Button colorPalette="brand" onClick={() => leaveToHome(true)}>Yeni Oyun</Button>
           )}

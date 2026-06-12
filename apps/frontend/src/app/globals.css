@@ -138,6 +138,19 @@
   }
 }
 
+/* ─── Kızma Birader: zar dönüşü + zar yuvası pulse ────────────────────────── */
+@keyframes kb-spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+.kb-die-rolling { animation: kb-spin 0.45s linear infinite; transform-origin: center; }
+
+@keyframes kb-slot-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(246, 199, 94, 0.75); }
+  50% { box-shadow: 0 0 0 7px rgba(246, 199, 94, 0); }
+}
+.kb-slot-glow { animation: kb-slot-pulse 1.2s ease-out infinite; }
+
 /* ─── Kızma Birader: yatay telefonda immersive (Tavla deseni) ─────────────── */
 @media (orientation: landscape) and (max-height: 500px) {
   .kb-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
@@ -155,20 +168,24 @@
     aspect-ratio: 1 / 1;
     margin: 0 auto;
   }
-  /* Oyuncu şeridi üstte yüzer, board'dan yer çalmaz. */
-  .kb-playerbar {
-    position: absolute; top: 2px; left: 0; right: 0;
+  /* Oyuncu kartları köşelere yüzer; ortadaki kare board'un sol/sağ marjları
+     kartları taşır. pointer-events: none satırı, kartlar arası boşluktan
+     board'a dokunmayı engellemez. */
+  .kb-cards {
+    position: absolute; left: 6px; right: 6px;
     width: auto !important; max-width: none !important;
+    display: flex !important;
+    justify-content: space-between;
     z-index: 5;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
   }
-  /* Durum + zar + zar-at butonu sağ marjda dikey yığın. */
+  .kb-cards-top { top: 4px; }
+  .kb-cards-bottom { bottom: 4px; }
+  .kb-cards > * { max-width: 168px; pointer-events: auto; }
+  /* Durum bildirimi alt-ortada yüzer. */
   .kb-actions {
-    position: absolute; right: 6px; top: 50%;
-    transform: translateY(-50%);
-    flex-direction: column !important;
-    align-items: flex-end !important;
-    gap: 10px !important;
+    position: absolute; bottom: 6px; left: 50%;
+    transform: translateX(-50%);
     z-index: 6;
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
   }
@@ -181,5 +198,7 @@
   .ao-cta-glow::after,
   .ao-row-in,
   .ao-fade-up,
-  .ao-spin-slow { animation: none !important; }
+  .ao-spin-slow,
+  .kb-die-rolling,
+  .kb-slot-glow { animation: none !important; }
 }

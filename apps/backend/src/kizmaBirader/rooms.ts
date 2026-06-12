@@ -5,6 +5,7 @@ import type { KizmaColor, KizmaGameState } from './types';
 export interface KizmaPlayer {
   userId: string;
   displayName: string;
+  avatarUrl?: string;
   socketId: string;
   color: KizmaColor | null;
   ready: boolean;
@@ -43,13 +44,15 @@ function cleanup(): void {
   for (const [k, r] of rooms) if (now - r.createdAt > STALE_MS) rooms.delete(k);
 }
 
-export function createRoom(userId: string, displayName: string, socketId: string): KizmaRoom {
+export function createRoom(
+  userId: string, displayName: string, socketId: string, avatarUrl?: string,
+): KizmaRoom {
   cleanup();
   let code: string;
   do { code = generateCode(); } while (rooms.has(code));
   const room: KizmaRoom = {
     code,
-    players: [{ userId, displayName, socketId, color: null, ready: false, connected: true, isHost: true }],
+    players: [{ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: true }],
     state: null,
     createdAt: Date.now(),
     messages: [],
@@ -59,7 +62,7 @@ export function createRoom(userId: string, displayName: string, socketId: string
 }
 
 export function joinRoom(
-  code: string, userId: string, displayName: string, socketId: string,
+  code: string, userId: string, displayName: string, socketId: string, avatarUrl?: string,
 ): { room: KizmaRoom; error?: string } {
   const room = rooms.get(code.toUpperCase());
   if (!room) return { room: null as unknown as KizmaRoom, error: 'Oda bulunamadı.' };
@@ -70,12 +73,13 @@ export function joinRoom(
     existing.socketId = socketId;
     existing.connected = true;
     existing.displayName = displayName;
+    existing.avatarUrl = avatarUrl;
     return { room };
   }
   if (room.players.filter((p) => p.connected).length >= MAX_PLAYERS) {
     return { room: null as unknown as KizmaRoom, error: 'Oda dolu.' };
   }
-  room.players.push({ userId, displayName, socketId, color: null, ready: false, connected: true, isHost: false });
+  room.players.push({ userId, displayName, avatarUrl, socketId, color: null, ready: false, connected: true, isHost: false });
   return { room };
 }
 

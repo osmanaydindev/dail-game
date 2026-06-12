@@ -5,6 +5,7 @@
 import type { Server, Namespace, Socket } from 'socket.io';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
+import { User } from '../models/User';
 import {
   createRoom, joinRoom, selectColor, setReady, rejoinRoom,
   getRoomBySocketId, disconnectPlayer, getRoom,
@@ -20,6 +21,7 @@ interface JwtPayload { sub: string; role: string; }
 function lobbyPayload(room: KizmaRoom) {
   const players = room.players.map((p) => ({
     displayName: p.displayName,
+    avatarUrl: p.avatarUrl,
     color: p.color,
     ready: p.ready,
     connected: p.connected,
@@ -48,12 +50,17 @@ export function attachKizmaBiraderSocket(io: Server): void {
   const nsp = io.of('/kizma');
 
   // ── Auth (Tavla ile aynı JWT deseni) ──────────────────────────────────────
-  nsp.use((socket, next) => {
+  nsp.use(async (socket, next) => {
     const token = socket.handshake.auth?.token as string | undefined;
     if (!token) return next(new Error('Unauthorized'));
     try {
       const payload = jwt.verify(token, env.ACCESS_TOKEN_SECRET) as JwtPayload;
       socket.data.userId = payload.sub;
+      // Avatar sunucudan okunur (istemciden gelen URL'e güvenilmez); opsiyonel.
+      try {
+        const u = await User.findById(payload.sub).select('avatarUrl').lean();
+        socket.data.avatarUrl = u?.avatarUrl ?? undefined;
+      } catch { /* avatar yoksa da oyun devam eder */ }
       next();
     } catch {
       next(new Error('Invalid token'));
@@ -65,7 +72,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
 
     // ── Oda oluştur ──────────────────────────────────────────────────────────
     socket.on('kizma:create', ({ displayName }: { displayName: string }) => {
-      const room = createRoom(userId, displayName, socket.id);
+      const room = createRoom(userId, displayName, socket.id, socket.data.avatarUrl);
       socket.join(room.code);
       socket.emit('kizma:created', { code: room.code });
       emitLobby(nsp, room);
@@ -89,7 +96,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
             state: rejoined.state,
             myColor: player.color,
             code: rejoined.code,
-            players: rejoined.players.map((p) => ({ displayName: p.displayName, color: p.color })),
+            players: rejoined.players.map((p) => ({ displayName: p.displayName, avatarUrl: p.avatarUrl, color: p.color })),
             legalMoves: getLegalMoves(rejoined.state),
             messages: rejoined.messages ?? [],
           });
@@ -105,7 +112,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
         return;
       }
 
-      const { room, error } = joinRoom(code, userId, displayName, socket.id);
+      const { room, error } = joinRoom(code, userId, displayName, socket.id, socket.data.avatarUrl);
       if (error || !room) {
         socket.emit('kizma:error', { message: error ?? 'Odaya katılınamadı.' });
         return;
@@ -161,7 +168,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
           state: room.state,
           myColor: player.color,
           code: room.code,
-          players: room.players.map((p) => ({ displayName: p.displayName, color: p.color })),
+          players: room.players.map((p) => ({ displayName: p.displayName, avatarUrl: p.avatarUrl, color: p.color })),
           legalMoves: getLegalMoves(room.state),
         });
       }
@@ -235,7 +242,7 @@ export function attachKizmaBiraderSocket(io: Server): void {
           state: room.state,
           myColor: player.color,
           code: room.code,
-          players: room.players.map((p) => ({ displayName: p.displayName, color: p.color })),
+          players: room.players.map((p) => ({ displayName: p.displayName, avatarUrl: p.avatarUrl, color: p.color })),
           legalMoves: getLegalMoves(room.state),
           messages: room.messages ?? [],
         });

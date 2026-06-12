@@ -2,9 +2,9 @@
 
 import React, { useMemo, useEffect, useRef, useState } from 'react';
 import type { KizmaColor, KizmaGameState, KizmaMove } from './types';
-import { COLOR_HEX } from './types';
+import { COLOR_HEX, BOARD_TINT } from './types';
 import {
-  GRID, RING_COORDS, HOME_PATH, YARD_BOX, START_OFFSET, SAFE_GLOBAL,
+  GRID, RING_COORDS, HOME_PATH, YARD_BOX, YARD_SLOTS, START_OFFSET, SAFE_GLOBAL,
   posToCoord, GOAL_POS,
 } from './boardLayout';
 
@@ -17,27 +17,24 @@ function colorOfStartGlobal(g: number): KizmaColor | null {
   return null;
 }
 
-// ── Zar yüzü — noktalı SVG ───────────────────────────────────────────────────
-function DieFace({ value, size = 44 }: { value: number; size?: number }) {
-  const dots: Record<number, [number, number][]> = {
-    1: [[0, 0]],
-    2: [[-0.28, -0.28], [0.28, 0.28]],
-    3: [[-0.28, -0.28], [0, 0], [0.28, 0.28]],
-    4: [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0.28], [0.28, 0.28]],
-    5: [[-0.28, -0.28], [0.28, -0.28], [0, 0], [-0.28, 0.28], [0.28, 0.28]],
-    6: [[-0.28, -0.28], [0.28, -0.28], [-0.28, 0], [0.28, 0], [-0.28, 0.28], [0.28, 0.28]],
-  };
-  const d = dots[value] ?? dots[1];
-  return (
-    <svg viewBox="-0.6 -0.6 1.2 1.2" width={size} height={size}>
-      <rect x="-0.58" y="-0.58" width="1.16" height="1.16" rx="0.2" fill="white" />
-      <rect x="-0.55" y="-0.55" width="1.1" height="1.1" rx="0.18" fill="none" stroke="#d0d5de" strokeWidth="0.04" />
-      {d.map(([x, y], i) => (
-        <circle key={i} cx={x} cy={y} r={0.11} fill="#1a2035" />
-      ))}
-    </svg>
-  );
+/** Geometrik 5 köşeli yıldız — font glifi değil (bkz. 630dfa4 boyut sorunu). */
+function starPoints(cx: number, cy: number, ro = 0.36, ri = 0.15): string {
+  const pts: string[] = [];
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const r = i % 2 === 0 ? ro : ri;
+    pts.push(`${(cx + r * Math.cos(a)).toFixed(3)},${(cy + r * Math.sin(a)).toFixed(3)}`);
+  }
+  return pts.join(' ');
 }
+
+// Ev sütunu giriş hücresindeki (HOME_PATH[c][0]) merkeze bakan beyaz ok.
+const HOME_ARROW: Record<KizmaColor, string> = {
+  red: '1.28,7.2 1.78,7.5 1.28,7.8',
+  blue: '7.2,1.28 7.8,1.28 7.5,1.78',
+  yellow: '13.72,7.2 13.22,7.5 13.72,7.8',
+  white: '7.2,13.72 7.8,13.72 7.5,13.22',
+};
 
 interface Props {
   state: KizmaGameState;
@@ -45,11 +42,10 @@ interface Props {
   legalMoves: KizmaMove[];
   isMyTurn: boolean;
   onTokenClick: (color: KizmaColor, tokenId: number) => void;
-  animDie: number | null;
   onStepSound?: () => void;
 }
 
-export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick, animDie, onStepSound }: Props) {
+export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick, onStepSound }: Props) {
   const movableTokenIds = useMemo(() => {
     if (!isMyTurn) return new Set<number>();
     return new Set(legalMoves.map((m) => m.tokenId));
@@ -170,133 +166,131 @@ export function KizmaBoard({ state, myColor, legalMoves, isMyTurn, onTokenClick,
     return nodes;
   }, [state.players, myColor, movableTokenIds, displayPositions]);
 
-  const dieFace = animDie ?? state.dice;
-
   return (
-    <div style={{ position: 'relative', width: '100%', height: '100%' }}>
-      <svg
-        viewBox={`0 0 ${GRID} ${GRID}`}
-        width="100%"
-        height="100%"
-        style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', touchAction: 'manipulation' }}
-        role="img"
-        aria-label="Kızma Birader tahtası"
-      >
-        <defs>
-          <linearGradient id="kb-bg" x1="0" y1="0" x2="1" y2="1" gradientUnits="objectBoundingBox">
-            <stop offset="0%" stopColor="#f0ece0" />
-            <stop offset="100%" stopColor="#e8e4d8" />
-          </linearGradient>
-          {(['red', 'blue', 'yellow', 'white'] as KizmaColor[]).map((c) => (
-            <radialGradient key={`yd-${c}`} id={`kb-yard-${c}`} cx="40%" cy="40%" r="65%">
-              <stop offset="0%" stopColor={COLOR_HEX[c]} stopOpacity="0.95" />
-              <stop offset="100%" stopColor={COLOR_HEX[c]} stopOpacity="0.5" />
-            </radialGradient>
+    <svg
+      viewBox={`0 0 ${GRID} ${GRID}`}
+      width="100%"
+      height="100%"
+      style={{ display: 'block', maxWidth: '100%', maxHeight: '100%', touchAction: 'manipulation' }}
+      role="img"
+      aria-label="Kızma Birader tahtası"
+    >
+      <defs>
+        {(['red', 'blue', 'yellow', 'white'] as KizmaColor[]).map((c) => (
+          <radialGradient key={`tk-${c}`} id={`kb-tok-${c}`} cx="35%" cy="30%" r="60%">
+            <stop offset="0%" stopColor="rgba(255,255,255,0.65)" />
+            <stop offset="100%" stopColor="rgba(0,0,0,0)" />
+          </radialGradient>
+        ))}
+      </defs>
+
+      {/* Zemin */}
+      <rect x={0} y={0} width={GRID} height={GRID} rx={0.6} fill="#ffffff" stroke="#1f2630" strokeWidth={0.12} />
+
+      {/* Yard kutuları — renkli çeyrek + beyaz daire + taş slotları */}
+      {(Object.keys(YARD_BOX) as KizmaColor[]).map((c) => {
+        const b = YARD_BOX[c];
+        return (
+          <g key={`yard-${c}`}>
+            <rect x={b.x} y={b.y} width={b.w} height={b.h} rx={0.3} fill={BOARD_TINT[c]} />
+            <circle cx={b.x + 3} cy={b.y + 3} r={2.45} fill="#ffffff" stroke="#2a313d" strokeWidth={0.05} />
+            {YARD_SLOTS[c].map((s, i) => (
+              <circle
+                key={`slot-${c}-${i}`}
+                cx={s.x} cy={s.y} r={0.55}
+                fill={BOARD_TINT[c]} fillOpacity={0.35}
+                stroke={BOARD_TINT[c]} strokeWidth={0.07}
+              />
+            ))}
+          </g>
+        );
+      })}
+
+      {/* Halka hücreleri */}
+      {RING_COORDS.map((c, g) => {
+        const isStart = START_GLOBAL.has(g);
+        const isSafe = SAFE_GLOBAL.has(g);
+        const startColor = isStart ? colorOfStartGlobal(g) : null;
+        return (
+          <g key={`ring-${g}`}>
+            <rect
+              x={c.x + 0.06}
+              y={c.y + 0.06}
+              width={0.88}
+              height={0.88}
+              rx={0.14}
+              fill={startColor ? BOARD_TINT[startColor] : '#ffffff'}
+              stroke="#2a313d"
+              strokeWidth={0.04}
+            />
+            {isSafe && !isStart && (
+              <polygon
+                points={starPoints(c.x + 0.5, c.y + 0.5)}
+                fill="#d6dbe4"
+                stroke="#7c8597"
+                strokeWidth={0.05}
+                strokeLinejoin="round"
+              />
+            )}
+          </g>
+        );
+      })}
+
+      {/* Ev sütunları + giriş oku */}
+      {(Object.keys(HOME_PATH) as KizmaColor[]).map((c) => (
+        <g key={`home-${c}`}>
+          {HOME_PATH[c].map((cell, i) => (
+            <rect
+              key={`home-${c}-${i}`}
+              x={cell.x + 0.06}
+              y={cell.y + 0.06}
+              width={0.88}
+              height={0.88}
+              rx={0.14}
+              fill={BOARD_TINT[c]}
+              stroke="#2a313d"
+              strokeWidth={0.04}
+            />
           ))}
-          {(['red', 'blue', 'yellow', 'white'] as KizmaColor[]).map((c) => (
-            <radialGradient key={`tk-${c}`} id={`kb-tok-${c}`} cx="35%" cy="30%" r="60%">
-              <stop offset="0%" stopColor="rgba(255,255,255,0.65)" />
-              <stop offset="100%" stopColor="rgba(0,0,0,0)" />
-            </radialGradient>
-          ))}
-        </defs>
-
-        {/* Zemin gradyan */}
-        <rect x={0} y={0} width={GRID} height={GRID} fill="url(#kb-bg)" />
-
-        {/* Yard kutuları */}
-        {(Object.keys(YARD_BOX) as KizmaColor[]).map((c) => {
-          const b = YARD_BOX[c];
-          return (
-            <g key={`yard-${c}`}>
-              <rect x={b.x + 0.15} y={b.y + 0.15} width={b.w - 0.3} height={b.h - 0.3} rx={0.6}
-                fill={`url(#kb-yard-${c})`} />
-              <rect x={b.x + 0.15} y={b.y + 0.15} width={b.w - 0.3} height={b.h - 0.3} rx={0.6}
-                fill="none" stroke={COLOR_HEX[c]} strokeWidth={0.12} opacity={0.7} />
-            </g>
-          );
-        })}
-
-        {/* Halka hücreleri */}
-        {RING_COORDS.map((c, g) => {
-          const isStart = START_GLOBAL.has(g);
-          const isSafe = SAFE_GLOBAL.has(g);
-          const startColor = isStart ? colorOfStartGlobal(g) : null;
-          return (
-            <g key={`ring-${g}`}>
-              <rect x={c.x + 0.05} y={c.y + 0.05} width={0.9} height={0.9} rx={0.12}
-                fill={startColor ? COLOR_HEX[startColor] : isSafe ? '#ffd54f' : '#ffffff'}
-                stroke="#bcc3cc" strokeWidth={0.04} />
-              {isSafe && !isStart && (
-                <circle cx={c.x + 0.5} cy={c.y + 0.5} r={0.19} fill="none" stroke="#b8860b" strokeWidth={0.06} />
-              )}
-            </g>
-          );
-        })}
-
-        {/* Ev sütunları */}
-        {(Object.keys(HOME_PATH) as KizmaColor[]).flatMap((c) =>
-          HOME_PATH[c].map((cell, i) => (
-            <rect key={`home-${c}-${i}`}
-              x={cell.x + 0.05} y={cell.y + 0.05} width={0.9} height={0.9} rx={0.12}
-              fill={COLOR_HEX[c]} opacity={0.88} stroke="#bcc3cc" strokeWidth={0.04} />
-          )),
-        )}
-
-        {/* Merkez — 4 üçgen */}
-        <g>
-          <polygon points="6,6 9,6 7.5,7.5" fill={COLOR_HEX.blue} opacity={0.95} />
-          <polygon points="9,6 9,9 7.5,7.5" fill={COLOR_HEX.yellow} opacity={0.95} />
-          <polygon points="9,9 6,9 7.5,7.5" fill={COLOR_HEX.white} opacity={0.95} />
-          <polygon points="6,9 6,6 7.5,7.5" fill={COLOR_HEX.red} opacity={0.95} />
-          <rect x={6} y={6} width={3} height={3} fill="none" stroke="#bcc3cc" strokeWidth={0.05} />
+          <polygon points={HOME_ARROW[c]} fill="#ffffff" opacity={0.9} />
         </g>
+      ))}
 
-        {/* Taşlar */}
-        {tokenNodes.map((n) => {
-          const fill = COLOR_HEX[n.color];
-          const isWhiteColor = n.color === 'white';
-          return (
-            <g key={`tok-${n.color}-${n.id}`}
-              onClick={() => n.movable && onTokenClick(n.color, n.id)}
-              style={{ cursor: n.movable ? 'pointer' : 'default' }}
-            >
-              {n.movable && (
-                <circle cx={n.x} cy={n.y} r={0.46} fill="none" stroke="#22c55e" strokeWidth={0.1} opacity={0.85}>
-                  <animate attributeName="r" values="0.40;0.50;0.40" dur="1.1s" repeatCount="indefinite" />
-                  <animate attributeName="opacity" values="0.9;0.3;0.9" dur="1.1s" repeatCount="indefinite" />
-                </circle>
-              )}
-              {/* Gölge */}
-              <circle cx={n.x + 0.04} cy={n.y + 0.07} r={0.3} fill="rgba(0,0,0,0.4)" />
-              {/* Gövde */}
-              <circle cx={n.x} cy={n.y} r={0.3} fill={fill}
-                stroke={isWhiteColor ? '#2a303d' : '#0e1319'}
-                strokeWidth={isWhiteColor ? 0.08 : 0.06} />
-              {/* Işık */}
-              <circle cx={n.x} cy={n.y} r={0.3} fill={`url(#kb-tok-${n.color})`} />
-              {/* Merkez nokta */}
-              <circle cx={n.x} cy={n.y} r={0.09}
-                fill={isWhiteColor ? '#4a5568' : 'rgba(255,255,255,0.45)'} />
-            </g>
-          );
-        })}
-      </svg>
+      {/* Merkez goal — 4 üçgen */}
+      <g>
+        <polygon points="6,6 9,6 7.5,7.5" fill={BOARD_TINT.blue} stroke="#ffffff" strokeWidth={0.08} />
+        <polygon points="9,6 9,9 7.5,7.5" fill={BOARD_TINT.yellow} stroke="#ffffff" strokeWidth={0.08} />
+        <polygon points="9,9 6,9 7.5,7.5" fill={BOARD_TINT.white} stroke="#ffffff" strokeWidth={0.08} />
+        <polygon points="6,9 6,6 7.5,7.5" fill={BOARD_TINT.red} stroke="#ffffff" strokeWidth={0.08} />
+        <rect x={6} y={6} width={3} height={3} fill="none" stroke="#2a313d" strokeWidth={0.06} />
+      </g>
 
-      {/* Zar — tahta ortasına yüzen */}
-      {dieFace != null && (
-        <div style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          pointerEvents: 'none',
-          zIndex: 10,
-          filter: 'drop-shadow(0 4px 14px rgba(0,0,0,0.6))',
-        }}>
-          <DieFace value={dieFace} size={56} />
-        </div>
-      )}
-    </div>
+      {/* Taşlar */}
+      {tokenNodes.map((n) => {
+        const fill = COLOR_HEX[n.color];
+        return (
+          <g
+            key={`tok-${n.color}-${n.id}`}
+            onClick={() => n.movable && onTokenClick(n.color, n.id)}
+            style={{ cursor: n.movable ? 'pointer' : 'default' }}
+          >
+            {n.movable && (
+              <circle cx={n.x} cy={n.y} r={0.46} fill="none" stroke="#16a34a" strokeWidth={0.12}>
+                <animate attributeName="r" values="0.40;0.50;0.40" dur="1.1s" repeatCount="indefinite" />
+                <animate attributeName="opacity" values="1;0.45;1" dur="1.1s" repeatCount="indefinite" />
+              </circle>
+            )}
+            {/* Gölge */}
+            <circle cx={n.x + 0.04} cy={n.y + 0.07} r={0.32} fill="rgba(0,0,0,0.35)" />
+            {/* Açık zemin: ince koyu dış halka + beyaz iç kontur taşı ayrıştırır */}
+            <circle cx={n.x} cy={n.y} r={0.4} fill="none" stroke="#1a1f27" strokeWidth={0.04} />
+            <circle cx={n.x} cy={n.y} r={0.34} fill={fill} stroke="#ffffff" strokeWidth={0.09} />
+            {/* Işık */}
+            <circle cx={n.x} cy={n.y} r={0.32} fill={`url(#kb-tok-${n.color})`} />
+            <circle cx={n.x} cy={n.y - 0.08} r={0.11} fill="#ffffff" opacity={0.45} />
+          </g>
+        );
+      })}
+    </svg>
   );
 }
