@@ -169,12 +169,16 @@ function Lobby({
   createdCode,
   error,
   joining,
+  matchTarget,
+  onMatchTargetChange,
 }: {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
   createdCode: string | null;
   error: string | null;
   joining: boolean;
+  matchTarget: number;
+  onMatchTargetChange: (n: number) => void;
 }) {
   const [code, setCode] = useState('');
 
@@ -193,7 +197,17 @@ function Lobby({
       )}
 
       <Box w="full" bg="surface.card" borderRadius="xl" borderWidth="1px" borderColor="border.subtle" p={5}>
-        <Text fontWeight="700" mb={3}>Yeni Oda Oluştur</Text>
+        <Text fontWeight="700" mb={2}>Yeni Oda Oluştur</Text>
+        <Text fontSize="xs" color="text.muted" mb={2}>Maç hedefi (o puana ilk ulaşan maçı kazanır):</Text>
+        <HStack gap={2} mb={3}>
+          {[1, 3, 5, 7].map(n => (
+            <Button key={n} size="sm" flex="1"
+              variant={matchTarget === n ? 'solid' : 'outline'}
+              colorPalette="brand"
+              onClick={() => onMatchTargetChange(n)}
+            >{n} Puan</Button>
+          ))}
+        </HStack>
         <Button w="full" colorPalette="brand" variant="solid" onClick={onCreateRoom} loading={joining}>
           Oda Oluştur
         </Button>
@@ -422,6 +436,11 @@ export function TavlaGame({ user }: TavlaGameProps) {
   // Where the player dropped the dice on the board (canvas logical px) — the dice
   // land and spin there. null = tap-roll / opponent roll → default spot.
   const [dicePos, setDicePos] = useState<{ x: number; y: number } | null>(null);
+  // Match state
+  const [matchTarget, setMatchTarget] = useState<number>(1);
+  const [scores, setScores] = useState<{ white: number; black: number }>({ white: 0, black: 0 });
+  const [matchWinner, setMatchWinner] = useState<Color | null>(null);
+  const [lastIsMars, setLastIsMars] = useState(false);
 
   // Keep myColorRef in sync so animation callbacks can read current color
   useEffect(() => { myColorRef.current = myColor; }, [myColor]);
@@ -514,7 +533,9 @@ export function TavlaGame({ user }: TavlaGameProps) {
       myColor: mc,
       players: pl,
       code,
-    }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string }) => {
+      matchTarget: mt,
+      scores: sc,
+    }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string; matchTarget?: number; scores?: { white: number; black: number } }) => {
       storage?.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
       prevPhaseRef.current = state.phase;
       prevStateRef.current = state;
@@ -522,6 +543,10 @@ export function TavlaGame({ user }: TavlaGameProps) {
       setGameState(state);
       setMyColor(mc);
       setPlayers(pl);
+      setMatchTarget(mt ?? 1);
+      setScores(sc ?? { white: 0, black: 0 });
+      setMatchWinner(null);
+      setLastIsMars(false);
       setPhase('playing');
     });
 
@@ -530,7 +555,9 @@ export function TavlaGame({ user }: TavlaGameProps) {
       myColor: mc,
       players: pl,
       code,
-    }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string }) => {
+      matchTarget: mt,
+      scores: sc,
+    }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string; matchTarget?: number; scores?: { white: number; black: number } }) => {
       rejoinAttemptRef.current = false;
       storage?.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
       prevPhaseRef.current = state.phase;
@@ -539,6 +566,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
       setGameState(state);
       setMyColor(mc);
       setPlayers(pl);
+      setMatchTarget(mt ?? 1);
+      setScores(sc ?? { white: 0, black: 0 });
       setPhase('playing');
       setJoining(false);
     });
@@ -572,6 +601,40 @@ export function TavlaGame({ user }: TavlaGameProps) {
         setSelected(null);
         setValidMoves([]);
       }
+    });
+
+    s.on('tavla:game_ended', ({
+      state, scores: sc, isMars,
+    }: { state: GameState; scores: { white: number; black: number }; isMars: boolean; lastWinner: Color }) => {
+      prevStateRef.current = state;
+      prevPhaseRef.current = state.phase;
+      setGameState(state);
+      setScores(sc);
+      setLastIsMars(isMars);
+    });
+
+    s.on('tavla:next_game', ({
+      state, scores: sc,
+    }: { state: GameState; scores: { white: number; black: number } }) => {
+      prevPhaseRef.current = state.phase;
+      prevStateRef.current = state;
+      prevTurnRef.current = state.turn;
+      setGameState(state);
+      setScores(sc);
+      setMatchWinner(null);
+      setLastIsMars(false);
+      setSelected(null);
+      setValidMoves([]);
+      setAnimDice(null);
+      setIsAnimating(false);
+    });
+
+    s.on('tavla:match_over', ({
+      scores: sc, winner, isMars,
+    }: { scores: { white: number; black: number }; winner: Color; target: number; isMars: boolean }) => {
+      setScores(sc);
+      setMatchWinner(winner);
+      setLastIsMars(isMars);
     });
 
     s.on('tavla:error', ({ message }: { message: string }) => {
@@ -617,8 +680,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const handleCreateRoom = useCallback(() => {
     setJoining(true);
     setError(null);
-    socketRef.current?.emit('tavla:create', { displayName: user.displayName });
-  }, [user.displayName]);
+    socketRef.current?.emit('tavla:create', { displayName: user.displayName, matchTarget });
+  }, [user.displayName, matchTarget]);
 
   const handleJoinRoom = useCallback((code: string) => {
     setJoining(true);
@@ -707,6 +770,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
         createdCode={phase === 'waiting' ? createdCode : null}
         error={error}
         joining={joining}
+        matchTarget={matchTarget}
+        onMatchTargetChange={setMatchTarget}
       />
     );
   }
@@ -721,7 +786,9 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
   const statusMsg = () => {
     if (gameState.phase === 'ended') {
-      return gameState.winner === myColor ? '🏆 Kazandın!' : '😔 Kaybettin';
+      const won = gameState.winner === myColor;
+      const marsMsg = lastIsMars ? (won ? ' (Mars!)' : ' (Mars yedik!)') : '';
+      return won ? `🏆 Kazandın!${marsMsg}` : `😔 Kaybettin${marsMsg}`;
     }
     if (opponentLeft) return 'Rakip oyundan ayrıldı.';
     if (isAnimating) return 'Zar atıldı...';
@@ -863,6 +930,18 @@ export function TavlaGame({ user }: TavlaGameProps) {
         />
       </Box>
 
+      {/* Maç skoru */}
+      {matchTarget > 1 && (
+        <HStack gap={3} py={1} px={4} borderRadius="full" bg="surface.card"
+          borderWidth="1px" borderColor="border.subtle">
+          <Text fontSize="xs" color="text.muted">Maç</Text>
+          <Text fontSize="sm" fontWeight="800">
+            {scores[myColor]} — {scores[myColor === 'white' ? 'black' : 'white']}
+          </Text>
+          <Text fontSize="xs" color="text.muted">{matchTarget}&apos;e kadar</Text>
+        </HStack>
+      )}
+
       {/* Action buttons */}
       <HStack className="tavla-actions" gap={4} align="center">
         {isMyTurn && gameState.phase === 'rolling' && (
@@ -873,12 +952,12 @@ export function TavlaGame({ user }: TavlaGameProps) {
             {isFullscreen ? '⛶ Çık' : '⛶ Tam Ekran'}
           </Button>
         )}
-        {gameState.phase !== 'ended' && (
+        {gameState.phase !== 'ended' && !matchWinner && (
           <Button variant="outline" colorPalette="red" size="sm" onClick={handleResign}>
             Teslim Ol
           </Button>
         )}
-        {gameState.phase === 'ended' && (
+        {gameState.phase === 'ended' && matchTarget === 1 && !matchWinner && (
           <Button
             variant="solid"
             colorPalette="brand"
@@ -890,6 +969,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
               setOpponentLeft(false);
               setSelected(null);
               setValidMoves([]);
+              setScores({ white: 0, black: 0 });
+              setMatchWinner(null);
               prevPhaseRef.current = null;
             }}
           >
@@ -898,6 +979,56 @@ export function TavlaGame({ user }: TavlaGameProps) {
         )}
       </HStack>
     </VStack>
+
+    {/* Maç bitti overlay */}
+    {matchWinner && (
+      <Box
+        position="fixed"
+        inset={0}
+        zIndex={200}
+        bg="rgba(0,0,0,0.82)"
+        display="flex"
+        flexDir="column"
+        alignItems="center"
+        justifyContent="center"
+        gap={4}
+        px={6}
+      >
+        <Text fontSize="4xl">{matchWinner === myColor ? '🏆' : '😔'}</Text>
+        <Text fontSize="2xl" fontWeight="900" color="white" textAlign="center">
+          {matchWinner === myColor ? 'Maçı Kazandın!' : 'Maçı Kaybettin'}
+        </Text>
+        {lastIsMars && (
+          <Box px={4} py={2} borderRadius="full" bg="orange.500">
+            <Text fontSize="sm" fontWeight="800" color="white">Mars ile! 🎯</Text>
+          </Box>
+        )}
+        <Text fontSize="lg" fontWeight="700" color="gray.300">
+          {scores[myColor]} — {scores[myColor === 'white' ? 'black' : 'white']}
+        </Text>
+        <Button
+          size="lg"
+          variant="solid"
+          colorPalette="brand"
+          mt={2}
+          onClick={() => {
+            storage?.removeItem(STORAGE_KEY);
+            setPhase('lobby');
+            setGameState(null);
+            setCreatedCode(null);
+            setOpponentLeft(false);
+            setSelected(null);
+            setValidMoves([]);
+            setScores({ white: 0, black: 0 });
+            setMatchWinner(null);
+            setLastIsMars(false);
+            prevPhaseRef.current = null;
+          }}
+        >
+          Yeni Maç
+        </Button>
+      </Box>
+    )}
     </Box>
   );
 }

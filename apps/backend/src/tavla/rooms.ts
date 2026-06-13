@@ -12,6 +12,9 @@ export interface Room {
   code: string;
   players: RoomPlayer[];
   state: GameState | null;
+  matchTarget: number;
+  scores: { white: number; black: number };
+  matchWinner: Color | null;
   createdAt: number;
   // Son oyuncu eylemi — eskime buna göre ölçülür (createdAt'e göre değil).
   lastActivity: number;
@@ -33,12 +36,12 @@ export function sweepRooms(): void {
   const now = Date.now();
   for (const [k, r] of rooms) {
     const idle = now - r.lastActivity;
-    const ended = r.state?.winner != null;
+    const ended = r.matchWinner != null;
     if ((ended && idle > ENDED_TTL_MS) || idle > IDLE_STALE_MS) rooms.delete(k);
   }
 }
 
-export function createRoom(userId: string, displayName: string, socketId: string): Room {
+export function createRoom(userId: string, displayName: string, socketId: string, matchTarget: number): Room {
   sweepRooms();
   let code: string;
   do { code = generateCode(); } while (rooms.has(code));
@@ -46,6 +49,9 @@ export function createRoom(userId: string, displayName: string, socketId: string
     code,
     players: [{ userId, displayName, socketId, color: 'white', connected: true }],
     state: null,
+    matchTarget,
+    scores: { white: 0, black: 0 },
+    matchWinner: null,
     createdAt: Date.now(),
     lastActivity: Date.now(),
   };

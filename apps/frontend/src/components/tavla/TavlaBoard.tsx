@@ -31,7 +31,7 @@ function makeGeo(maxW: number, maxH?: number): Geo {
   W = Math.round(W);
   H = Math.round(H);
 
-  const BORDER   = Math.max(10, Math.round(W * 0.025));
+  const BORDER   = Math.max(32, Math.round(W * 0.07));
   const BAR_W    = Math.max(28, Math.round(W * 0.067));
   const BOARD_W  = W - 2 * BORDER;
   const POINT_W  = (BOARD_W - BAR_W) / 12;
@@ -148,16 +148,16 @@ function drawChecker(ctx: CanvasRenderingContext2D, x: number, y: number, color:
   // Body
   ctx.beginPath();
   ctx.arc(x, y, CR, 0, Math.PI * 2);
-  ctx.fillStyle = isWhite ? '#f0ece0' : '#c0392b';
+  ctx.fillStyle = isWhite ? '#f0e8d0' : '#8b2500';
   ctx.fill();
-  ctx.strokeStyle = highlight ? '#4af' : (isWhite ? '#c8c0b0' : '#7a1010');
+  ctx.strokeStyle = highlight ? '#4af' : (isWhite ? '#c8c0b0' : '#5c1a00');
   ctx.lineWidth = highlight ? 2.5 : 1.5;
   ctx.stroke();
   // Inner ring
   const innerR = Math.max(2, CR - 4);
   ctx.beginPath();
   ctx.arc(x, y, innerR, 0, Math.PI * 2);
-  ctx.strokeStyle = isWhite ? '#ddd8c8' : '#8b1a1a';
+  ctx.strokeStyle = isWhite ? '#ddd8c8' : '#5c1a00';
   ctx.lineWidth = 1;
   ctx.stroke();
   // Highlight spot
@@ -165,7 +165,7 @@ function drawChecker(ctx: CanvasRenderingContext2D, x: number, y: number, color:
   ctx.globalAlpha = 0.45;
   ctx.beginPath();
   ctx.arc(x - CR * 0.28, y - CR * 0.28, CR * 0.38, 0, Math.PI * 2);
-  ctx.fillStyle = isWhite ? '#fff' : '#e05050';
+  ctx.fillStyle = isWhite ? '#fff' : '#c04030';
   ctx.fill();
   ctx.restore();
 }
@@ -214,7 +214,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   const geoRef = useRef<Geo>(makeGeo(720));
   const [geo, setGeo] = useState<Geo>(() => makeGeo(720));
 
-  const dark = '#8b1a1a', light = '#d4856a', boardBg = '#4a1a08', borderColor = '#7a3d10';
+  const dark = '#6b2d0e', light = '#c4956a', boardBg = '#2d1505', borderColor = '#5c3310';
 
   // ── Responsive sizing — fit to both available width and viewport height ─────
   useEffect(() => {
@@ -281,7 +281,8 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     // Board background
     ctx.fillStyle = boardBg;
     ctx.fillRect(BORDER, BOARD_Y, BOARD_W, BOARD_H);
-    ctx.fillStyle = '#2d0d04';
+    // Bar (merkez dikey) — krem/fildişi ahşap tonu, tahtadan belirgin ayrışır
+    ctx.fillStyle = '#c8b080';
     ctx.fillRect(BORDER + 6 * POINT_W, BOARD_Y, BAR_W, BOARD_H);
 
     // Triangles
@@ -291,14 +292,19 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
       drawTriangle(ctx, g, col, false, fill);
     }
 
+    // Yatay orta bant — üst/alt oyun alanlarını ayırır
+    ctx.fillStyle = 'rgba(200, 176, 128, 0.12)';
+    ctx.fillRect(BORDER, BOARD_Y + HALF_H - 3, BOARD_W, 6);
+    ctx.strokeStyle = 'rgba(200, 176, 128, 0.55)'; ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(BORDER, BOARD_Y + HALF_H); ctx.lineTo(BORDER + BOARD_W, BOARD_Y + HALF_H);
+    ctx.stroke();
+
     // Borders
     ctx.strokeStyle = borderColor; ctx.lineWidth = 3;
     ctx.strokeRect(BORDER, BOARD_Y, BOARD_W, BOARD_H);
+    ctx.strokeStyle = '#3d1a05'; ctx.lineWidth = 2;
     ctx.strokeRect(BORDER + 6 * POINT_W, BOARD_Y, BAR_W, BOARD_H);
-    ctx.strokeStyle = borderColor + '55'; ctx.lineWidth = 1;
-    ctx.beginPath();
-    ctx.moveTo(BORDER, BOARD_Y + HALF_H); ctx.lineTo(W - BORDER, BOARD_Y + HALF_H);
-    ctx.stroke();
 
     // ── Highlight valid destinations ──────────────────────────────────────
     const destSet = new Set(
@@ -354,18 +360,23 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
       drawChecker(ctx, bx, y, 'black', selected === 'bar' && myColor === 'black' && n === drawBar.black - 1, CR);
     }
 
-    // ── Borne-off indicators ───────────────────────────────────────────────
-    if (ds.borneOff.white > 0) {
-      for (let n = 0; n < Math.min(ds.borneOff.white, 15); n++) {
-        ctx.fillStyle = '#f0ece0';
-        ctx.fillRect(W - BORDER + 2, BOARD_Y + BOARD_H - 4 - n * 6 - 3, BORDER - 4, 5);
-      }
+    // ── Borne-off tray — mini checker daireler ────────────────────────────
+    const boR = Math.min(Math.floor((BORDER - 6) / 2), Math.floor((BOARD_H - 8) / 32));
+    const bx2 = W - Math.floor(BORDER / 2);
+    // Tray arka planı
+    ctx.fillStyle = '#4a2c10';
+    ctx.fillRect(W - BORDER + 2, BOARD_Y, BORDER - 2, BOARD_H);
+    ctx.strokeStyle = borderColor; ctx.lineWidth = 1.5;
+    ctx.strokeRect(W - BORDER + 2, BOARD_Y, BORDER - 2, BOARD_H);
+    // White (altta, yukarı yığılır)
+    for (let n = 0; n < Math.min(ds.borneOff.white, 15); n++) {
+      const by = BOARD_Y + BOARD_H - boR - n * (boR * 2 + 2) - 4;
+      drawChecker(ctx, bx2, by, 'white', false, boR);
     }
-    if (ds.borneOff.black > 0) {
-      for (let n = 0; n < Math.min(ds.borneOff.black, 15); n++) {
-        ctx.fillStyle = '#c0392b';
-        ctx.fillRect(W - BORDER + 2, BOARD_Y + 4 + n * 6 - 2, BORDER - 4, 4);
-      }
+    // Black (üstte, aşağı yığılır)
+    for (let n = 0; n < Math.min(ds.borneOff.black, 15); n++) {
+      const by = BOARD_Y + boR + n * (boR * 2 + 2) + 4;
+      drawChecker(ctx, bx2, by, 'black', false, boR);
     }
 
     ctx.restore();

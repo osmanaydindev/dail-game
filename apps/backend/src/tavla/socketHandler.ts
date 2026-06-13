@@ -3,10 +3,44 @@ import type { Server as HttpServer } from 'http';
 import jwt from 'jsonwebtoken';
 import { env } from '../config/env';
 import { createRoom, joinRoom, rejoinRoom, getRoomBySocketId, disconnectPlayer, sweepRooms } from './rooms';
+import type { Room } from './rooms';
 import {
   createInitialState, rollDice, applyRoll, getLegalMoves, applyMove,
 } from './engine';
 import type { Move } from './engine';
+
+function handleGameEnd(io: Server, room: Room, wasResign: boolean) {
+  const state = room.state!;
+  const winner = state.winner!;
+  const loser = winner === 'white' ? 'black' : 'white';
+  const isMars = !wasResign && state.borneOff[loser] === 0;
+  const points = isMars ? 2 : 1;
+  room.scores[winner] += points;
+
+  if (room.scores[winner] >= room.matchTarget) {
+    room.matchWinner = winner;
+    io.to(room.code).emit('tavla:match_over', {
+      scores: room.scores,
+      winner: room.matchWinner,
+      target: room.matchTarget,
+      isMars,
+    });
+  } else {
+    io.to(room.code).emit('tavla:game_ended', {
+      state: room.state,
+      scores: room.scores,
+      isMars,
+      lastWinner: winner,
+    });
+    setTimeout(() => {
+      if (!room.state) return;
+      const newState = createInitialState();
+      newState.turn = Math.random() < 0.5 ? 'white' : 'black';
+      room.state = newState;
+      io.to(room.code).emit('tavla:next_game', { state: newState, scores: room.scores });
+    }, 2500);
+  }
+}
 
 interface JwtPayload { sub: string; role: string; }
 
@@ -41,8 +75,9 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
     const userId: string = socket.data.userId;
 
     // Create room
-    socket.on('tavla:create', ({ displayName }: { displayName: string }) => {
-      const room = createRoom(userId, displayName, socket.id);
+    socket.on('tavla:create', ({ displayName, matchTarget }: { displayName: string; matchTarget?: number }) => {
+      const target = [1, 3, 5, 7].includes(matchTarget ?? 0) ? matchTarget! : 1;
+      const room = createRoom(userId, displayName, socket.id, target);
       socket.join(room.code);
       socket.emit('tavla:created', { code: room.code });
     });
@@ -73,6 +108,8 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
           myColor: player.color,
           players: playerInfo,
           code: room.code,
+          matchTarget: room.matchTarget,
+          scores: room.scores,
         });
       }
     });
@@ -95,6 +132,8 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
         myColor: player.color,
         players: playerInfo,
         code: room.code,
+        matchTarget: room.matchTarget,
+        scores: room.scores,
       });
       // Notify the other player
       for (const p of room.players) {
@@ -141,7 +180,11 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
       }
 
       room.state = applyMove(room.state, move);
-      io.to(room.code).emit('tavla:state', { state: room.state });
+      if (room.state.phase === 'ended') {
+        handleGameEnd(io, room, false);
+      } else {
+        io.to(room.code).emit('tavla:state', { state: room.state });
+      }
     });
 
     // Resign
@@ -152,7 +195,7 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
       if (!player) return;
       const winner = player.color === 'white' ? 'black' : 'white';
       room.state = { ...room.state, winner, phase: 'ended' };
-      io.to(room.code).emit('tavla:state', { state: room.state });
+      handleGameEnd(io, room, true);
     });
 
     // Disconnect — keep room alive for rejoin
