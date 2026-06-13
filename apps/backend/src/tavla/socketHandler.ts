@@ -198,11 +198,45 @@ export function attachTavlaSocket(httpServer: HttpServer): Server {
       handleGameEnd(io, room, true);
     });
 
-    // Disconnect — keep room alive for rejoin
+    // Forfeit — leave game, opponent wins the entire match
+    socket.on('tavla:forfeit', () => {
+      const room = getRoomBySocketId(socket.id);
+      if (!room?.state || room.matchWinner) return;
+      const player = room.players.find(p => p.socketId === socket.id);
+      if (!player) return;
+      const winner = player.color === 'white' ? 'black' : 'white';
+      room.scores[winner] = room.matchTarget;
+      room.matchWinner = winner;
+      room.state = { ...room.state, winner, phase: 'ended' };
+      io.to(room.code).emit('tavla:match_over', {
+        scores: room.scores,
+        winner,
+        target: room.matchTarget,
+        isMars: false,
+      });
+    });
+
+    // Disconnect — keep room alive for rejoin; forfeit after 30s if no reconnect
     socket.on('disconnect', () => {
       const result = disconnectPlayer(socket.id);
       if (result) {
-        io.to(result.room.code).emit('tavla:opponent_left');
+        const { room, player } = result;
+        io.to(room.code).emit('tavla:opponent_left');
+        if (room.state && room.state.phase !== 'ended' && !room.matchWinner) {
+          setTimeout(() => {
+            if (!room.state || room.matchWinner || player.connected) return;
+            const winner = player.color === 'white' ? 'black' : 'white';
+            room.scores[winner] = room.matchTarget;
+            room.matchWinner = winner;
+            room.state = { ...room.state, winner, phase: 'ended' };
+            io.to(room.code).emit('tavla:match_over', {
+              scores: room.scores,
+              winner,
+              target: room.matchTarget,
+              isMars: false,
+            });
+          }, 30_000);
+        }
       }
     });
   });

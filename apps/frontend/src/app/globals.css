@@ -81,11 +81,12 @@
   .ao-gradient-text { animation: none; }
 }
 
-/* ─── Tavla: hide the header on landscape phones to free vertical space ───── */
-/* Lock the play area to the viewport height (100dvh, no scroll) and lay it out
-   as a flex column so the board takes the remaining space. The board then
-   measures that real space via ResizeObserver — robust against the iOS quirk
-   where window.innerHeight is stale right after an orientation change. */
+/* ─── Tavla: landscape-only sidebar action column (hidden in portrait) ──────── */
+.tavla-ls-actions { display: none; }
+
+/* ─── Tavla: landscape phones — CSS Grid layout ──────────────────────────────
+   CSS Grid overrides Chakra VStack's inline flex styles via !important.
+   Layout: left col (player names) | board (fills height) | right col (actions)  */
 @media (orientation: landscape) and (max-height: 500px) {
   body:has(.ao-immersive-landscape) { overflow: hidden; }
   .ao-immersive-landscape > nav { display: none; }
@@ -101,41 +102,91 @@
     display: flex;
     flex-direction: column;
   }
-  .tavla-container { flex: 1; min-height: 0; display: flex; flex-direction: column; }
-  .tavla-stack {
-    flex: 1; min-height: 0; width: 100%;
-    position: relative;        /* anchor for the floating UI below */
-    gap: 0 !important;
-  }
-  /* Board fills the whole play area and stays dead-centred (no shrinking). */
-  .tavla-board-wrap {
+  .tavla-container {
     flex: 1; min-height: 0;
+    display: flex; flex-direction: column;
+    height: 100%;
+  }
+
+  /* CSS Grid — overrides VStack inline display:flex */
+  .tavla-stack {
+    display: grid !important;
+    grid-template-areas:
+      "err   err   err"
+      "top   board acts"
+      "bot   board acts";
+    grid-template-columns: 110px 1fr 88px;
+    grid-template-rows: auto 1fr 1fr;
+    width: 100%;
+    height: 100%;
+    gap: 0 !important;
+    align-items: stretch !important;
+    align-content: stretch !important;
+  }
+
+  .tavla-error { grid-area: err; }
+
+  .tavla-player-top {
+    grid-area: top;
+    padding: 4px 6px;
+    display: flex !important;
+    align-items: center;
+    max-width: none !important;
+    overflow: hidden;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+  .tavla-player-bottom {
+    grid-area: bot;
+    padding: 4px 6px;
+    display: flex !important;
+    align-items: center;
+    max-width: none !important;
+    overflow: hidden;
+    border-right: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* PlayerCard: vertical in narrow column */
+  .tavla-player-card {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 1px !important;
+    padding: 2px 4px !important;
+    border-radius: 6px !important;
+    width: 100%;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .tavla-board-wrap {
+    grid-area: board;
+    min-height: 0;
     max-width: none !important;
     border: 0 !important;
     border-radius: 0 !important;
     box-shadow: none !important;
-    display: flex;
+    display: flex !important;
     align-items: center;
     justify-content: center;
+    overflow: hidden;
   }
-  /* Player names + action buttons float so they never steal space from the board.
-     The board is height-limited, so its left/right margins hold the names. */
-  .tavla-playerbar {
-    position: absolute; top: 4px; left: 0; right: 0;
-    width: auto !important; max-width: none !important;
-    z-index: 5;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+
+  /* Right column: compact action buttons */
+  .tavla-ls-actions {
+    grid-area: acts;
+    display: flex !important;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    gap: 5px;
+    padding: 6px 4px;
+    border-left: 1px solid rgba(255,255,255,0.06);
   }
-  /* Buttons + dice-roll control live in the right margin, never over the board. */
-  .tavla-actions {
-    position: absolute; right: 6px; top: 50%;
-    transform: translateY(-50%);
-    flex-direction: column !important;
-    align-items: flex-end !important;
-    gap: 10px !important;
-    z-index: 6;
-    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
-  }
+
+  /* Portrait layout elements → hidden in landscape */
+  .tavla-actions    { display: none !important; }
+  .tavla-score-pill { display: none !important; }
+  .tavla-dice-hint  { display: none !important; }
 }
 
 /* ─── Kızma Birader: zar dönüşü + zar yuvası pulse ────────────────────────── */

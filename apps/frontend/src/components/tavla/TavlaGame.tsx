@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import {
   Box, VStack, HStack, Text, Button, Input, Alert, Spinner,
 } from '@chakra-ui/react';
@@ -166,6 +165,7 @@ function getLegalMoves(state: GameState, myColor: Color): Move[] {
 function Lobby({
   onCreateRoom,
   onJoinRoom,
+  onCancelWaiting,
   createdCode,
   error,
   joining,
@@ -174,6 +174,7 @@ function Lobby({
 }: {
   onCreateRoom: () => void;
   onJoinRoom: (code: string) => void;
+  onCancelWaiting: () => void;
   createdCode: string | null;
   error: string | null;
   joining: boolean;
@@ -181,6 +182,39 @@ function Lobby({
   onMatchTargetChange: (n: number) => void;
 }) {
   const [code, setCode] = useState('');
+  const [copied, setCopied] = useState(false);
+
+  const copyCode = () => {
+    if (!createdCode) return;
+    navigator.clipboard.writeText(createdCode).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  if (createdCode) {
+    return (
+      <VStack gap={6} maxW="360px" mx="auto" pt={8} px={4}>
+        <Box textAlign="center">
+          <Text fontSize="2xl" fontWeight="800" mb={1}>Tavla</Text>
+        </Box>
+        <Box w="full" bg="surface.card" borderRadius="xl" borderWidth="1px" borderColor="border.subtle" p={6} textAlign="center">
+          <Spinner size="sm" mb={3} />
+          <Text fontWeight="700" mb={1}>Rakip bekleniyor...</Text>
+          <Text fontSize="xs" color="text.muted" mb={4}>Bu kodu rakibine gönder</Text>
+          <Text fontSize="3xl" fontWeight="900" fontFamily="mono" letterSpacing="widest" mb={4}>
+            {createdCode}
+          </Text>
+          <Button w="full" colorPalette="brand" variant="solid" size="md" onClick={copyCode} mb={3}>
+            {copied ? '✓ Kopyalandı!' : '📋 Kodu Kopyala'}
+          </Button>
+          <Button w="full" variant="outline" colorPalette="red" size="sm" onClick={onCancelWaiting}>
+            İptal Et
+          </Button>
+        </Box>
+      </VStack>
+    );
+  }
 
   return (
     <VStack gap={6} maxW="360px" mx="auto" pt={8} px={4}>
@@ -211,15 +245,6 @@ function Lobby({
         <Button w="full" colorPalette="brand" variant="solid" onClick={onCreateRoom} loading={joining}>
           Oda Oluştur
         </Button>
-        {createdCode && (
-          <Box mt={3} p={3} bg="surface.subtle" borderRadius="lg" textAlign="center">
-            <Text fontSize="xs" color="text.muted" mb={1}>Oda kodu — rakibine gönder</Text>
-            <Text fontSize="2xl" fontWeight="900" fontFamily="mono" letterSpacing="widest">
-              {createdCode}
-            </Text>
-            <Text fontSize="xs" color="text.muted" mt={1}>Rakibin katılmasını bekliyorsun...</Text>
-          </Box>
-        )}
       </Box>
 
       <Box w="full" bg="surface.card" borderRadius="xl" borderWidth="1px" borderColor="border.subtle" p={5}>
@@ -250,108 +275,6 @@ function Lobby({
   );
 }
 
-// ── Drag-to-roll dice ─────────────────────────────────────────────────────────
-function DragDice({
-  boardRef,
-  onRoll,
-  disabled,
-}: {
-  boardRef: React.RefObject<HTMLDivElement | null>;
-  onRoll: (pos?: { x: number; y: number }) => void;
-  disabled: boolean;
-}) {
-  const [dragging, setDragging] = useState(false);
-  const [pos, setPos] = useState({ x: 0, y: 0 });
-  const movedRef = useRef(false);
-
-  const tryRoll = useCallback((clientX: number, clientY: number) => {
-    setDragging(false);
-    if (!movedRef.current) { onRoll(); return; } // tap = roll at default spot
-    // Drop the dice where it landed on the board canvas (logical px).
-    const canvas = boardRef.current?.querySelector('canvas') as HTMLCanvasElement | null;
-    if (!canvas) { onRoll(); return; }
-    const rect = canvas.getBoundingClientRect();
-    const x = clientX - rect.left;
-    const y = clientY - rect.top;
-    if (x >= 0 && x <= rect.width && y >= 0 && y <= rect.height) {
-      onRoll({ x, y }); // dropped on the board → land & spin there
-    }
-    // dropped off the board → no roll (cancel)
-  }, [boardRef, onRoll]);
-
-  // Pointer Events unify mouse + touch and, with setPointerCapture, track the
-  // drag in real time on mobile too (no passive-listener / scroll interference).
-  const downRef  = useRef(false);
-  const startRef = useRef({ x: 0, y: 0 });
-
-  const handlePointerDown = (e: React.PointerEvent) => {
-    if (disabled) return;
-    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
-    downRef.current = true;
-    movedRef.current = false;
-    startRef.current = { x: e.clientX, y: e.clientY };
-    setPos({ x: e.clientX, y: e.clientY });
-    setDragging(true);
-  };
-  const handlePointerMove = (e: React.PointerEvent) => {
-    if (!downRef.current) return;
-    if (Math.hypot(e.clientX - startRef.current.x, e.clientY - startRef.current.y) > 8) {
-      movedRef.current = true;
-    }
-    setPos({ x: e.clientX, y: e.clientY }); // dice follow the finger/cursor live
-  };
-  const handlePointerUp = (e: React.PointerEvent) => {
-    if (!downRef.current) return;
-    downRef.current = false;
-    (e.currentTarget as Element).releasePointerCapture?.(e.pointerId);
-    tryRoll(e.clientX, e.clientY);
-  };
-
-  return (
-    <>
-      <Box
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        onPointerCancel={handlePointerUp}
-        cursor={disabled ? 'default' : 'grab'}
-        userSelect="none"
-        style={{ touchAction: 'none' }}
-        opacity={disabled ? 0.4 : 1}
-        display="flex"
-        flexDir="column"
-        alignItems="center"
-        gap={1}
-      >
-        <Text fontSize="4xl" lineHeight={1}>🎲🎲</Text>
-        {!disabled && (
-          <Text fontSize="xs" color="text.muted" pointerEvents="none">
-            Tut &amp; tahtaya sürükle
-          </Text>
-        )}
-      </Box>
-      {/* Portal to <body> so position:fixed is viewport-relative even when an
-          ancestor (e.g. the landscape controls column) has a CSS transform. */}
-      {dragging && typeof document !== 'undefined' && createPortal(
-        <Box
-          position="fixed"
-          style={{
-            left: pos.x - 36,
-            top: pos.y - 36,
-            transform: 'scale(1.35)',
-            pointerEvents: 'none',
-            zIndex: 2000,
-            opacity: 0.85,
-            fontSize: '2.4rem',
-          }}
-        >
-          🎲🎲
-        </Box>,
-        document.body,
-      )}
-    </>
-  );
-}
 
 // ── Player card bileşeni ──────────────────────────────────────────────────────
 function PlayerCard({
@@ -362,6 +285,7 @@ function PlayerCard({
   const checkerColor = color === 'white' ? '#f0ece0' : '#c0392b';
   return (
     <HStack
+      className="tavla-player-card"
       px={3} py={2} borderRadius="xl" justify="space-between" w="full"
       style={{
         background: isActive ? `${checkerColor}18` : 'transparent',
@@ -415,7 +339,6 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const prevTurnRef = useRef<Color | null>(null);
   const justMovedRef = useRef(false);
   const myColorRef = useRef<Color>('white');
-  const boardRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   const [phase, setPhase] = useState<'lobby' | 'waiting' | 'playing'>('lobby');
@@ -433,9 +356,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
   const [showTurnNotif, setShowTurnNotif] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [fsSupported, setFsSupported] = useState(false);
-  // Where the player dropped the dice on the board (canvas logical px) — the dice
-  // land and spin there. null = tap-roll / opponent roll → default spot.
-  const [dicePos, setDicePos] = useState<{ x: number; y: number } | null>(null);
+  const [disconnectCountdown, setDisconnectCountdown] = useState<number | null>(null);
+  const disconnectTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   // Match state
   const [matchTarget, setMatchTarget] = useState<number>(1);
   const [scores, setScores] = useState<{ white: number; black: number }>({ white: 0, black: 0 });
@@ -474,14 +396,19 @@ export function TavlaGame({ user }: TavlaGameProps) {
     }
   }, []);
 
+  // Cleanup disconnect timer on unmount
+  useEffect(() => {
+    return () => {
+      if (disconnectTimerRef.current) clearInterval(disconnectTimerRef.current);
+    };
+  }, []);
+
   // ── Dice animation ─────────────────────────────────────────────────────────
   const startDiceAnimation = useCallback((finalState: GameState) => {
     if (animatingRef.current) return;
     animatingRef.current = true;
     setIsAnimating(true);
     pendingStateRef.current = finalState;
-    // Opponent's roll → ignore our last drop position, use the default spot.
-    if (finalState.turn !== myColorRef.current) setDicePos(null);
     playDiceSound();
 
     // Frame delays: fast→slow (ms between frames)
@@ -523,6 +450,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
     socketRef.current = s;
 
     s.on('tavla:created', ({ code }: { code: string }) => {
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code }));
       setCreatedCode(code);
       setPhase('waiting');
       setJoining(false);
@@ -649,10 +577,25 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
     s.on('tavla:opponent_left', () => {
       setOpponentLeft(true);
+      let secs = 30;
+      setDisconnectCountdown(secs);
+      disconnectTimerRef.current = setInterval(() => {
+        secs -= 1;
+        setDisconnectCountdown(secs > 0 ? secs : null);
+        if (secs <= 0) {
+          clearInterval(disconnectTimerRef.current!);
+          disconnectTimerRef.current = null;
+        }
+      }, 1000);
     });
 
     s.on('tavla:opponent_reconnected', () => {
       setOpponentLeft(false);
+      if (disconnectTimerRef.current) {
+        clearInterval(disconnectTimerRef.current);
+        disconnectTimerRef.current = null;
+      }
+      setDisconnectCountdown(null);
     });
 
     s.on('connect_error', () => {
@@ -689,9 +632,8 @@ export function TavlaGame({ user }: TavlaGameProps) {
     socketRef.current?.emit('tavla:join', { code, displayName: user.displayName });
   }, [user.displayName]);
 
-  const handleRoll = useCallback((pos?: { x: number; y: number }) => {
+  const handleRoll = useCallback(() => {
     if (isAnimating) return;
-    setDicePos(pos ?? null);
     socketRef.current?.emit('tavla:roll');
   }, [isAnimating]);
 
@@ -700,6 +642,31 @@ export function TavlaGame({ user }: TavlaGameProps) {
       socketRef.current?.emit('tavla:resign');
     }
   }, []);
+
+  const resetToLobby = useCallback(() => {
+    storage?.removeItem(STORAGE_KEY);
+    setPhase('lobby');
+    setGameState(null);
+    setCreatedCode(null);
+    setOpponentLeft(false);
+    setSelected(null);
+    setValidMoves([]);
+    setScores({ white: 0, black: 0 });
+    setMatchWinner(null);
+    setLastIsMars(false);
+    setAnimDice(null);
+    setIsAnimating(false);
+    prevPhaseRef.current = null;
+  }, []);
+
+  const handleLeaveGame = useCallback(() => {
+    const inProgress = gameState && gameState.phase !== 'ended' && !matchWinner;
+    if (inProgress) {
+      if (!confirm('Maçtan ayrılmak istiyor musun?\nRakibiniz maçı kazanmış sayılır.')) return;
+      socketRef.current?.emit('tavla:forfeit');
+    }
+    resetToLobby();
+  }, [gameState, matchWinner, resetToLobby]);
 
   // ── Point click (select + move) ────────────────────────────────────────────
   const handlePointClick = useCallback((idx: number | 'bar' | 'off') => {
@@ -767,6 +734,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       <Lobby
         onCreateRoom={handleCreateRoom}
         onJoinRoom={handleJoinRoom}
+        onCancelWaiting={resetToLobby}
         createdCode={phase === 'waiting' ? createdCode : null}
         error={error}
         joining={joining}
@@ -790,7 +758,10 @@ export function TavlaGame({ user }: TavlaGameProps) {
       const marsMsg = lastIsMars ? (won ? ' (Mars!)' : ' (Mars yedik!)') : '';
       return won ? `🏆 Kazandın!${marsMsg}` : `😔 Kaybettin${marsMsg}`;
     }
-    if (opponentLeft) return 'Rakip oyundan ayrıldı.';
+    if (opponentLeft) {
+      const secs = disconnectCountdown ?? 30;
+      return `Rakip ayrıldı... ${secs}s sonra hükmen kazanırsın`;
+    }
     if (isAnimating) return 'Zar atıldı...';
     if (!isMyTurn) return `${oppInfo?.displayName ?? 'Rakip'} oynuyor...`;
     if (gameState.phase === 'rolling') return 'Zarını at!';
@@ -880,14 +851,14 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
     <VStack className="tavla-stack" gap={2} align="center" w="full">
       {error && (
-        <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
+        <Alert.Root className="tavla-error" status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
           <Alert.Indicator />
           <Alert.Title fontSize="sm">{error}</Alert.Title>
         </Alert.Root>
       )}
 
       {/* Rakip — tahta üstünde */}
-      <Box w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
+      <Box className="tavla-player-top" w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
         <PlayerCard
           name={oppInfo?.displayName ?? 'Rakip'}
           borneOff={gameState.borneOff[myColor === 'white' ? 'black' : 'white']}
@@ -898,7 +869,6 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
       {/* Board — tam viewport genişliği, köşe yuvarlama sadece desktop'ta */}
       <Box
-        ref={boardRef}
         className="tavla-board-wrap"
         w="full"
         maxW={{ base: '100vw', md: '720px' }}
@@ -914,13 +884,13 @@ export function TavlaGame({ user }: TavlaGameProps) {
           selected={selected}
           validMoves={validMoves}
           animDice={animDice}
-          dicePos={dicePos}
+          dicePos={null}
           onPointClick={handlePointClick}
         />
       </Box>
 
       {/* Ben — tahta altında */}
-      <Box w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
+      <Box className="tavla-player-bottom" w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
         <PlayerCard
           name={myInfo?.displayName ?? 'Sen'}
           borneOff={gameState.borneOff[myColor]}
@@ -932,7 +902,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
       {/* Maç skoru */}
       {matchTarget > 1 && (
-        <HStack gap={3} py={1} px={4} borderRadius="full" bg="surface.card"
+        <HStack className="tavla-score-pill" gap={3} py={1} px={4} borderRadius="full" bg="surface.card"
           borderWidth="1px" borderColor="border.subtle">
           <Text fontSize="xs" color="text.muted">Maç</Text>
           <Text fontSize="sm" fontWeight="800">
@@ -942,42 +912,64 @@ export function TavlaGame({ user }: TavlaGameProps) {
         </HStack>
       )}
 
-      {/* Action buttons */}
-      <HStack className="tavla-actions" gap={4} align="center">
+      {/* Landscape-only compact action column (hidden in portrait via CSS) */}
+      <Box className="tavla-ls-actions">
         {isMyTurn && gameState.phase === 'rolling' && (
-          <DragDice boardRef={boardRef} onRoll={handleRoll} disabled={isAnimating} />
-        )}
-        {fsSupported && (
-          <Button variant="ghost" size="sm" onClick={toggleFullscreen} aria-label="Tam ekran">
-            {isFullscreen ? '⛶ Çık' : '⛶ Tam Ekran'}
+          <Button size="sm" colorPalette="brand" variant="solid"
+            onClick={() => handleRoll()} disabled={isAnimating}>
+            🎲 Zar At
           </Button>
         )}
         {gameState.phase !== 'ended' && !matchWinner && (
-          <Button variant="outline" colorPalette="red" size="sm" onClick={handleResign}>
+          <Button size="xs" variant="outline" colorPalette="red"
+            onClick={handleResign}>
             Teslim Ol
           </Button>
         )}
+        <Button size="xs" variant="ghost" colorPalette="red"
+          onClick={handleLeaveGame}>
+          Ayrıl
+        </Button>
         {gameState.phase === 'ended' && matchTarget === 1 && !matchWinner && (
-          <Button
-            variant="solid"
-            colorPalette="brand"
-            onClick={() => {
-              storage?.removeItem(STORAGE_KEY);
-              setPhase('lobby');
-              setGameState(null);
-              setCreatedCode(null);
-              setOpponentLeft(false);
-              setSelected(null);
-              setValidMoves([]);
-              setScores({ white: 0, black: 0 });
-              setMatchWinner(null);
-              prevPhaseRef.current = null;
-            }}
-          >
+          <Button size="xs" variant="solid" colorPalette="brand"
+            onClick={resetToLobby}>
             Yeni Oyun
           </Button>
         )}
-      </HStack>
+      </Box>
+
+      {/* Action buttons (portrait) */}
+      <VStack className="tavla-actions" gap={2} w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
+        {isMyTurn && gameState.phase === 'rolling' && (
+          <Button
+            w="full" colorPalette="brand" variant="solid" size="lg"
+            onClick={handleRoll} disabled={isAnimating}
+            fontSize="xl" fontWeight="800" py={6}
+          >
+            🎲 Zarını At!
+          </Button>
+        )}
+        {(gameState.phase === 'ended' || matchWinner) ? (
+          <Button w="full" variant="solid" colorPalette="brand" size="md" onClick={resetToLobby}>
+            {matchWinner ? 'Yeni Maç' : 'Yeni Oyun'}
+          </Button>
+        ) : null}
+        <HStack gap={3} w="full" justify="center">
+          {fsSupported && (
+            <Button variant="ghost" size="sm" onClick={toggleFullscreen} aria-label="Tam ekran">
+              {isFullscreen ? '⛶ Çık' : '⛶ Tam Ekran'}
+            </Button>
+          )}
+          {gameState.phase !== 'ended' && !matchWinner && (
+            <Button variant="outline" colorPalette="red" size="sm" onClick={handleResign}>
+              Teslim Ol
+            </Button>
+          )}
+          <Button variant="ghost" colorPalette="red" size="sm" onClick={handleLeaveGame}>
+            Ayrıl
+          </Button>
+        </HStack>
+      </VStack>
     </VStack>
 
     {/* Maç bitti overlay */}
@@ -1006,25 +998,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
         <Text fontSize="lg" fontWeight="700" color="gray.300">
           {scores[myColor]} — {scores[myColor === 'white' ? 'black' : 'white']}
         </Text>
-        <Button
-          size="lg"
-          variant="solid"
-          colorPalette="brand"
-          mt={2}
-          onClick={() => {
-            storage?.removeItem(STORAGE_KEY);
-            setPhase('lobby');
-            setGameState(null);
-            setCreatedCode(null);
-            setOpponentLeft(false);
-            setSelected(null);
-            setValidMoves([]);
-            setScores({ white: 0, black: 0 });
-            setMatchWinner(null);
-            setLastIsMars(false);
-            prevPhaseRef.current = null;
-          }}
-        >
+        <Button size="lg" variant="solid" colorPalette="brand" mt={2} onClick={resetToLobby}>
           Yeni Maç
         </Button>
       </Box>
