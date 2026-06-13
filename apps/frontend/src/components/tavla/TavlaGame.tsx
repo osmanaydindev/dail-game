@@ -339,12 +339,53 @@ function DragDice({
   );
 }
 
+// ── Player card bileşeni ──────────────────────────────────────────────────────
+function PlayerCard({
+  name, borneOff, isActive, color, statusMsg,
+}: {
+  name: string; borneOff: number; isActive: boolean; color: Color; statusMsg?: string;
+}) {
+  const checkerColor = color === 'white' ? '#f0ece0' : '#c0392b';
+  return (
+    <HStack
+      px={3} py={2} borderRadius="xl" justify="space-between" w="full"
+      style={{
+        background: isActive ? `${checkerColor}18` : 'transparent',
+        border: `1.5px solid ${isActive ? checkerColor : 'transparent'}`,
+        boxShadow: isActive ? `0 0 14px ${checkerColor}44` : 'none',
+        transition: 'all 0.25s',
+      }}
+    >
+      <HStack gap={2}>
+        <Box
+          w="12px" h="12px" borderRadius="full" flexShrink={0}
+          style={{ background: checkerColor, border: '1.5px solid rgba(0,0,0,0.25)', boxShadow: `0 1px 4px ${checkerColor}66` }}
+        />
+        <Text fontSize="sm" fontWeight="700">{name}</Text>
+        <Text fontSize="xs" color="text.muted">({borneOff}/15)</Text>
+      </HStack>
+      {statusMsg && (
+        <Box
+          px={3} py={0.5} borderRadius="full"
+          style={{ background: isActive ? '#22c55e' : undefined }}
+          bg={isActive ? undefined : 'surface.subtle'}
+        >
+          <Text fontSize="xs" fontWeight="700" color={isActive ? 'white' : 'text.muted'}>
+            {statusMsg}
+          </Text>
+        </Box>
+      )}
+    </HStack>
+  );
+}
+
 // ── Main game component ───────────────────────────────────────────────────────
 interface TavlaGameProps {
   user: { _id: string; displayName: string };
 }
 
 const STORAGE_KEY = 'tavla-room';
+const storage = typeof window !== 'undefined' ? localStorage : null;
 
 export function TavlaGame({ user }: TavlaGameProps) {
   const isPortraitMobile = usePortraitMobile();
@@ -474,7 +515,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       players: pl,
       code,
     }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string }) => {
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
       prevPhaseRef.current = state.phase;
       prevStateRef.current = state;
       prevTurnRef.current = state.turn;
@@ -491,7 +532,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       code,
     }: { state: GameState; myColor: Color; players: PlayerInfo[]; code: string }) => {
       rejoinAttemptRef.current = false;
-      sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
+      storage?.setItem(STORAGE_KEY, JSON.stringify({ code, color: mc }));
       prevPhaseRef.current = state.phase;
       prevStateRef.current = state;
       prevTurnRef.current = state.turn;
@@ -536,7 +577,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
     s.on('tavla:error', ({ message }: { message: string }) => {
       if (rejoinAttemptRef.current) {
         rejoinAttemptRef.current = false;
-        sessionStorage.removeItem(STORAGE_KEY);
+        storage?.removeItem(STORAGE_KEY);
       }
       setError(message);
       setTimeout(() => setError(null), 3000);
@@ -558,14 +599,14 @@ export function TavlaGame({ user }: TavlaGameProps) {
 
     // Attempt rejoin if we have a saved session
     s.on('connect', () => {
-      const raw = sessionStorage.getItem(STORAGE_KEY);
+      const raw = storage?.getItem(STORAGE_KEY);
       if (raw) {
         try {
           const { code } = JSON.parse(raw) as { code: string; color: Color };
           rejoinAttemptRef.current = true;
           s.emit('tavla:rejoin', { code });
         } catch {
-          sessionStorage.removeItem(STORAGE_KEY);
+          storage?.removeItem(STORAGE_KEY);
         }
       }
     });
@@ -770,7 +811,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
       Sıra Sende! 🎲
     </Box>
 
-    <VStack className="tavla-stack" gap={3} align="center" w="full">
+    <VStack className="tavla-stack" gap={2} align="center" w="full">
       {error && (
         <Alert.Root status="error" borderRadius="lg" maxW="600px" w="full" mx={{ base: 3, md: 0 }}>
           <Alert.Indicator />
@@ -778,28 +819,15 @@ export function TavlaGame({ user }: TavlaGameProps) {
         </Alert.Root>
       )}
 
-      {/* Player info bar — yatay padding ile noPadding AppShell'i dengele */}
-      <HStack
-        className="tavla-playerbar"
-        justify="space-between"
-        w="full"
-        maxW={{ base: '100%', md: '720px' }}
-        px={{ base: 3, md: 2 }}
-      >
-        <HStack gap={2}>
-          <Box w="14px" h="14px" borderRadius="full" bg={myColor === 'white' ? '#e8e0d0' : '#2a1f1f'} borderWidth="1px" borderColor="border.subtle" />
-          <Text fontSize="sm" fontWeight="700">{myInfo?.displayName ?? 'Sen'}</Text>
-          <Text fontSize="xs" color="text.muted">({gameState.borneOff[myColor]}/15)</Text>
-        </HStack>
-        <Text fontSize="sm" color={isMyTurn ? 'green.400' : 'text.muted'} fontWeight="600">
-          {statusMsg()}
-        </Text>
-        <HStack gap={2}>
-          <Text fontSize="xs" color="text.muted">({gameState.borneOff[myColor === 'white' ? 'black' : 'white']}/15)</Text>
-          <Text fontSize="sm" fontWeight="700">{oppInfo?.displayName ?? 'Rakip'}</Text>
-          <Box w="14px" h="14px" borderRadius="full" bg={myColor === 'white' ? '#2a1f1f' : '#e8e0d0'} borderWidth="1px" borderColor="border.subtle" />
-        </HStack>
-      </HStack>
+      {/* Rakip — tahta üstünde */}
+      <Box w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
+        <PlayerCard
+          name={oppInfo?.displayName ?? 'Rakip'}
+          borneOff={gameState.borneOff[myColor === 'white' ? 'black' : 'white']}
+          isActive={!isMyTurn && gameState.phase !== 'ended'}
+          color={myColor === 'white' ? 'black' : 'white'}
+        />
+      </Box>
 
       {/* Board — tam viewport genişliği, köşe yuvarlama sadece desktop'ta */}
       <Box
@@ -807,11 +835,10 @@ export function TavlaGame({ user }: TavlaGameProps) {
         className="tavla-board-wrap"
         w="full"
         maxW={{ base: '100vw', md: '720px' }}
-        borderRadius={{ base: 'none', md: 'xl' }}
+        borderRadius={{ base: 'none', md: '2xl' }}
         overflow="hidden"
-        borderWidth={{ base: '0', md: '2px' }}
-        borderColor="border.subtle"
-        boxShadow={{ base: 'none', md: '0 8px 32px rgba(0,0,0,0.2)' }}
+        borderWidth={{ base: '0', md: '0' }}
+        boxShadow={{ base: 'none', md: '0 16px 64px rgba(0,0,0,0.45), 0 4px 16px rgba(0,0,0,0.25)' }}
       >
         <TavlaBoard
           state={gameState}
@@ -822,6 +849,17 @@ export function TavlaGame({ user }: TavlaGameProps) {
           animDice={animDice}
           dicePos={dicePos}
           onPointClick={handlePointClick}
+        />
+      </Box>
+
+      {/* Ben — tahta altında */}
+      <Box w="full" maxW={{ base: '100%', md: '720px' }} px={{ base: 3, md: 2 }}>
+        <PlayerCard
+          name={myInfo?.displayName ?? 'Sen'}
+          borneOff={gameState.borneOff[myColor]}
+          isActive={isMyTurn}
+          color={myColor}
+          statusMsg={statusMsg()}
         />
       </Box>
 
@@ -845,7 +883,7 @@ export function TavlaGame({ user }: TavlaGameProps) {
             variant="solid"
             colorPalette="brand"
             onClick={() => {
-              sessionStorage.removeItem(STORAGE_KEY);
+              storage?.removeItem(STORAGE_KEY);
               setPhase('lobby');
               setGameState(null);
               setCreatedCode(null);

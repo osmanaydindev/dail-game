@@ -39,7 +39,7 @@ function makeGeo(maxW: number, maxH?: number): Geo {
   const BOARD_H  = H - 2 * BORDER;
   const HALF_H   = BOARD_H / 2;
   const POINT_H  = HALF_H - Math.max(6, Math.round(HALF_H * 0.055));
-  const CR       = Math.max(6, Math.min(Math.floor(POINT_W / 2) - 1, 22));
+  const CR       = Math.max(5, Math.min(Math.floor(POINT_W / 2) - 3, 18));
   const DIE_S    = Math.max(20, Math.min(34, Math.round(CR * 1.55)));
   return { W, H, DPR, landscape, BORDER, BAR_W, BOARD_W, POINT_W, BOARD_Y, BOARD_H, HALF_H, POINT_H, CR, DIE_S };
 }
@@ -137,19 +137,37 @@ function drawTriangle(ctx: CanvasRenderingContext2D, g: Geo, col: number, isTop:
 
 function drawChecker(ctx: CanvasRenderingContext2D, x: number, y: number, color: Color, highlight: boolean, CR: number) {
   const isWhite = color === 'white';
+  // Shadow
+  ctx.save();
+  ctx.globalAlpha = 0.35;
+  ctx.beginPath();
+  ctx.arc(x + 1.5, y + 2, CR, 0, Math.PI * 2);
+  ctx.fillStyle = '#000';
+  ctx.fill();
+  ctx.restore();
+  // Body
   ctx.beginPath();
   ctx.arc(x, y, CR, 0, Math.PI * 2);
-  ctx.fillStyle = isWhite ? '#e8e0d0' : '#2a1f1f';
+  ctx.fillStyle = isWhite ? '#f0ece0' : '#c0392b';
   ctx.fill();
-  ctx.strokeStyle = highlight ? '#4af' : (isWhite ? '#bbb' : '#555');
-  ctx.lineWidth = highlight ? 2.5 : 2;
+  ctx.strokeStyle = highlight ? '#4af' : (isWhite ? '#c8c0b0' : '#7a1010');
+  ctx.lineWidth = highlight ? 2.5 : 1.5;
   ctx.stroke();
-  const innerR = Math.max(2, CR - 5);
+  // Inner ring
+  const innerR = Math.max(2, CR - 4);
   ctx.beginPath();
   ctx.arc(x, y, innerR, 0, Math.PI * 2);
-  ctx.strokeStyle = isWhite ? '#ccc4b0' : '#3d2e2e';
-  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = isWhite ? '#ddd8c8' : '#8b1a1a';
+  ctx.lineWidth = 1;
   ctx.stroke();
+  // Highlight spot
+  ctx.save();
+  ctx.globalAlpha = 0.45;
+  ctx.beginPath();
+  ctx.arc(x - CR * 0.28, y - CR * 0.28, CR * 0.38, 0, Math.PI * 2);
+  ctx.fillStyle = isWhite ? '#fff' : '#e05050';
+  ctx.fill();
+  ctx.restore();
 }
 
 function drawDie(ctx: CanvasRenderingContext2D, x: number, y: number, value: number, used: boolean, S: number, rot = 0) {
@@ -196,7 +214,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
   const geoRef = useRef<Geo>(makeGeo(720));
   const [geo, setGeo] = useState<Geo>(() => makeGeo(720));
 
-  const dark = '#1a3d2b', light = '#c8a96e', boardBg = '#2d5a3e', borderColor = '#8b6914';
+  const dark = '#8b1a1a', light = '#d4856a', boardBg = '#4a1a08', borderColor = '#7a3d10';
 
   // ── Responsive sizing — fit to both available width and viewport height ─────
   useEffect(() => {
@@ -263,7 +281,7 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     // Board background
     ctx.fillStyle = boardBg;
     ctx.fillRect(BORDER, BOARD_Y, BOARD_W, BOARD_H);
-    ctx.fillStyle = '#1e4a2e';
+    ctx.fillStyle = '#2d0d04';
     ctx.fillRect(BORDER + 6 * POINT_W, BOARD_Y, BAR_W, BOARD_H);
 
     // Triangles
@@ -339,13 +357,13 @@ export function TavlaBoard({ state, myColor, flip, selected, validMoves, animDic
     // ── Borne-off indicators ───────────────────────────────────────────────
     if (ds.borneOff.white > 0) {
       for (let n = 0; n < Math.min(ds.borneOff.white, 15); n++) {
-        ctx.fillStyle = '#e8e0d0';
+        ctx.fillStyle = '#f0ece0';
         ctx.fillRect(W - BORDER + 2, BOARD_Y + BOARD_H - 4 - n * 6 - 3, BORDER - 4, 5);
       }
     }
     if (ds.borneOff.black > 0) {
       for (let n = 0; n < Math.min(ds.borneOff.black, 15); n++) {
-        ctx.fillStyle = '#2a1f1f';
+        ctx.fillStyle = '#c0392b';
         ctx.fillRect(W - BORDER + 2, BOARD_Y + 4 + n * 6 - 2, BORDER - 4, 4);
       }
     }
