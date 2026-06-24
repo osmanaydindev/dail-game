@@ -4,10 +4,9 @@ import { Box, Button, Field, Input, Text, VStack, Alert } from '@chakra-ui/react
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { useRouter } from 'next/navigation';
+import { useRouter, Link } from '@/lib/navigation';
 import { useTranslations } from 'next-intl';
 import { useAuthStore } from '@/store/authStore';
-import Link from 'next/link';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
 

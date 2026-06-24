@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter } from '@/lib/navigation';
+import { useRouter, Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useTranslations } from 'next-intl';
 import { motion } from 'framer-motion';
@@ -15,7 +15,6 @@ import {
   HStack,
   Button,
 } from '@chakra-ui/react';
-import Link from 'next/link';
 import { LoadingState } from '@/components/ui/LoadingState';
 
 interface Stats {

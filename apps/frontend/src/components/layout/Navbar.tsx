@@ -6,8 +6,7 @@ import {
 } from '@chakra-ui/react';
 import { motion } from 'framer-motion';
 import { useTranslations, useLocale } from 'next-intl';
-import Link from 'next/link';
-import { usePathname, useRouter } from '@/lib/navigation';
+import { Link, usePathname, useRouter } from '@/lib/navigation';
 import { useAuthStore } from '@/store/authStore';
 import { useColorMode } from '@/providers/ChakraProvider';
 

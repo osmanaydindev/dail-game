@@ -6,7 +6,7 @@ import { useTranslations } from 'next-intl';
 import { AppShell } from '@/components/layout/AppShell';
 import { DailyLeaderboardWidget } from '@/components/leaderboard/DailyLeaderboardWidget';
 import { Box, Text, VStack, HStack, Button } from '@chakra-ui/react';
-import Link from 'next/link';
+import { Link } from '@/lib/navigation';
 import { useMousePosition } from '@/hooks/useMousePosition';
 import { Reveal } from '@/components/ui/Reveal';
 

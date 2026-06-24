@@ -3,7 +3,7 @@
 import { useEffect } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter } from '@/lib/navigation';
+import { useRouter, Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useTranslations } from 'next-intl';
 import {
@@ -23,7 +23,6 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
-import Link from 'next/link';
 
 const schema = z.object({
   email: z.string().email(),

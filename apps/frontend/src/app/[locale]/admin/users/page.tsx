@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { AppShell } from '@/components/layout/AppShell';
 import { useAuthStore } from '@/store/authStore';
-import { useRouter } from '@/lib/navigation';
+import { useRouter, Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
 import { useTranslations } from 'next-intl';
 import { LoadingState } from '@/components/ui/LoadingState';
@@ -23,7 +23,6 @@ import {
   Input,
   VStack,
 } from '@chakra-ui/react';
-import Link from 'next/link';
 import type { UserPublic } from '@dail-game/types';
 
 export default function AdminUsersPage() {
