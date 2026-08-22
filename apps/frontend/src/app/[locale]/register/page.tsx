@@ -8,20 +8,35 @@ import { z } from 'zod';
 import { Link } from '@/lib/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useAuthStore } from '@/store/authStore';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
+
+// Field limits, kept in sync with the backend schemas so the browser rejects
+// oversized input before it is ever sent. The server remains the real gate.
+const MAX = { email: 254, username: 20, displayName: 50, password: 128 } as const;
 
 // Mirrors registerSchema on the backend (validation/auth.schemas.ts).
 const schema = z
   .object({
-    email: z.string().email(),
+    email: z.string().trim().max(MAX.email).email(),
     username: z
       .string()
       .min(3)
-      .max(20)
+      .max(MAX.username)
       .regex(/^[a-zA-Z0-9_]+$/),
-    displayName: z.string().min(1).max(50),
-    password: z.string().min(8).max(128),
+    displayName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(MAX.displayName)
+      .regex(/^[^\p{C}]+$/u),
+    password: z
+      .string()
+      .min(8)
+      .max(MAX.password)
+      .regex(/\p{L}/u)
+      .regex(/\d/),
     confirmPassword: z.string(),
   })
   .refine((v) => v.password === v.confirmPassword, {
@@ -30,6 +45,28 @@ const schema = z
   });
 
 type FormValues = z.infer<typeof schema>;
+
+/** Live checklist — mirrors the PASSWORD schema on the backend exactly. */
+function PasswordRules({ value, labels }: { value: string; labels: Record<string, string> }) {
+  const rules = [
+    { key: 'len', ok: value.length >= 8, label: labels.len },
+    { key: 'letter', ok: /\p{L}/u.test(value), label: labels.letter },
+    { key: 'digit', ok: /\d/.test(value), label: labels.digit },
+  ];
+
+  return (
+    <VStack gap={1} align="stretch" mt={2}>
+      {rules.map((r) => (
+        <HStack key={r.key} gap={2} fontSize="xs">
+          <Text color={r.ok ? '#538d4e' : 'text.muted'} w="14px" lineHeight={1.4}>
+            {r.ok ? '✓' : '•'}
+          </Text>
+          <Text color={r.ok ? '#538d4e' : 'text.muted'}>{r.label}</Text>
+        </HStack>
+      ))}
+    </VStack>
+  );
+}
 
 export default function RegisterPage() {
   const t = useTranslations('auth');
@@ -40,9 +77,12 @@ export default function RegisterPage() {
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    watch,
+    formState: { errors, isSubmitting },
     setError,
-  } = useForm<FormValues>({ resolver: zodResolver(schema) });
+  } = useForm<FormValues>({ resolver: zodResolver(schema), mode: 'onTouched' });
+
+  const passwordValue = watch('password') ?? '';
 
   const onSubmit = async (data: FormValues) => {
     try {
@@ -113,32 +153,71 @@ export default function RegisterPage() {
 
                   <Field.Root invalid={!!errors.email}>
                     <Field.Label fontWeight="500">{t('email')}</Field.Label>
-                    <Input type="email" placeholder="you@example.com" autoComplete="email" {...register('email')} />
-                    {errors.email && <Field.ErrorText>{errors.email.message}</Field.ErrorText>}
+                    <Input
+                      type="email"
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      maxLength={MAX.email}
+                      {...register('email')}
+                    />
+                    {errors.email && <Field.ErrorText>{t('invalidEmail')}</Field.ErrorText>}
                   </Field.Root>
 
                   <Field.Root invalid={!!errors.username}>
                     <Field.Label fontWeight="500">{t('username')}</Field.Label>
-                    <Input placeholder="oyuncu_1" autoComplete="username" autoCapitalize="off" {...register('username')} />
+                    <Input
+                      placeholder="oyuncu_1"
+                      autoComplete="username"
+                      autoCapitalize="off"
+                      spellCheck={false}
+                      maxLength={MAX.username}
+                      {...register('username')}
+                    />
                     <Field.HelperText>{t('usernameHint')}</Field.HelperText>
-                    {errors.username && <Field.ErrorText>{errors.username.message}</Field.ErrorText>}
+                    {errors.username && <Field.ErrorText>{t('usernameHint')}</Field.ErrorText>}
                   </Field.Root>
 
                   <Field.Root invalid={!!errors.displayName}>
                     <Field.Label fontWeight="500">{t('displayName')}</Field.Label>
-                    <Input placeholder="Osman" autoComplete="name" {...register('displayName')} />
-                    {errors.displayName && <Field.ErrorText>{errors.displayName.message}</Field.ErrorText>}
+                    <Input
+                      placeholder="Osman"
+                      autoComplete="name"
+                      maxLength={MAX.displayName}
+                      {...register('displayName')}
+                    />
+                    {errors.displayName && <Field.ErrorText>{t('displayNameInvalid')}</Field.ErrorText>}
                   </Field.Root>
 
                   <Field.Root invalid={!!errors.password}>
                     <Field.Label fontWeight="500">{t('password')}</Field.Label>
-                    <Input type="password" placeholder="••••••••" autoComplete="new-password" {...register('password')} />
-                    {errors.password && <Field.ErrorText>{t('passwordMin')}</Field.ErrorText>}
+                    <PasswordInput
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      maxLength={MAX.password}
+                      toggleLabel={t('togglePassword')}
+                      {...register('password')}
+                    />
+                    <PasswordRules
+                      value={passwordValue}
+                      labels={{
+                        len: t('ruleLength'),
+                        letter: t('ruleLetter'),
+                        digit: t('ruleDigit'),
+                      }}
+                    />
                   </Field.Root>
 
                   <Field.Root invalid={!!errors.confirmPassword}>
                     <Field.Label fontWeight="500">{t('confirmPassword')}</Field.Label>
-                    <Input type="password" placeholder="••••••••" autoComplete="new-password" {...register('confirmPassword')} />
+                    <PasswordInput
+                      placeholder="••••••••"
+                      autoComplete="new-password"
+                      maxLength={MAX.password}
+                      toggleLabel={t('togglePassword')}
+                      {...register('confirmPassword')}
+                    />
                     {errors.confirmPassword && <Field.ErrorText>{t('passwordsDontMatch')}</Field.ErrorText>}
                   </Field.Root>
 
@@ -147,7 +226,9 @@ export default function RegisterPage() {
                     colorPalette="brand"
                     size="lg"
                     width="full"
-                    loading={isLoading}
+                    // isSubmitting also covers the gap before the store flips
+                    // isLoading, so a double tap can't fire two registrations.
+                    loading={isLoading || isSubmitting}
                     loadingText={t('registering')}
                     fontWeight="600"
                     mt={2}

@@ -8,12 +8,15 @@ import { z } from 'zod';
 import { useRouter, Link } from '@/lib/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useAuthStore } from '@/store/authStore';
+import { PasswordInput } from '@/components/ui/PasswordInput';
 import type { AxiosError } from 'axios';
 import { EMAIL_NOT_VERIFIED, type ApiResponse } from '@dail-game/types';
 
+const MAX = { email: 254, password: 128 } as const;
+
 const schema = z.object({
-  email: z.string().email(),
-  password: z.string().min(1),
+  email: z.string().trim().max(MAX.email).email(),
+  password: z.string().min(1).max(MAX.password),
 });
 type FormValues = z.infer<typeof schema>;
 
@@ -29,7 +32,7 @@ export default function LoginPage() {
   const [resending, setResending] = useState(false);
   const [resendSent, setResendSent] = useState(false);
 
-  const { register, handleSubmit, formState: { errors }, setError } = useForm<FormValues>({
+  const { register, handleSubmit, formState: { errors, isSubmitting }, setError } = useForm<FormValues>({
     resolver: zodResolver(schema),
   });
 
@@ -99,15 +102,38 @@ export default function LoginPage() {
               )}
               <Field.Root invalid={!!errors.email}>
                 <Field.Label fontWeight="500">{t('email')}</Field.Label>
-                <Input type="email" placeholder="you@example.com" autoComplete="email" {...register('email')} />
-                {errors.email && <Field.ErrorText>{errors.email.message}</Field.ErrorText>}
+                <Input
+                  type="email"
+                  placeholder="you@example.com"
+                  autoComplete="email"
+                  autoCapitalize="off"
+                  spellCheck={false}
+                  maxLength={MAX.email}
+                  {...register('email')}
+                />
+                {errors.email && <Field.ErrorText>{t('invalidEmail')}</Field.ErrorText>}
               </Field.Root>
               <Field.Root invalid={!!errors.password}>
                 <Field.Label fontWeight="500">{t('password')}</Field.Label>
-                <Input type="password" placeholder="••••••••" autoComplete="current-password" {...register('password')} />
+                <PasswordInput
+                  placeholder="••••••••"
+                  autoComplete="current-password"
+                  maxLength={MAX.password}
+                  toggleLabel={t('togglePassword')}
+                  {...register('password')}
+                />
                 {errors.password && <Field.ErrorText>{errors.password.message}</Field.ErrorText>}
               </Field.Root>
-              <Button type="submit" colorPalette="brand" size="lg" width="full" loading={isLoading} loadingText={t('signingIn')} fontWeight="600" mt={2}>
+              <Button
+                type="submit"
+                colorPalette="brand"
+                size="lg"
+                width="full"
+                loading={isLoading || isSubmitting}
+                loadingText={t('signingIn')}
+                fontWeight="600"
+                mt={2}
+              >
                 {t('loginButton')}
               </Button>
             </VStack>

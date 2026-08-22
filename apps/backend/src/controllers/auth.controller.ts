@@ -2,6 +2,7 @@ import type { Request, Response } from 'express';
 import { User } from '../models/User';
 import {
   validatePassword,
+  burnPasswordComparison,
   hashPassword,
   issueTokens,
   rotateRefreshToken,
@@ -59,6 +60,9 @@ export async function login(req: Request, res: Response): Promise<void> {
 
     const user = await User.findOne({ email: email.toLowerCase(), isActive: true }).select('+passwordHash');
     if (!user) {
+      // Spend the same time bcrypt would have, so the response latency does not
+      // tell an attacker whether this address has an account.
+      await burnPasswordComparison(password);
       unauthorized(res, 'Invalid credentials');
       return;
     }

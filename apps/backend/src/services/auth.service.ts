@@ -1,4 +1,5 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import type mongoose from 'mongoose';
 import { User } from '../models/User';
 import { RefreshToken } from '../models/RefreshToken';
@@ -16,6 +17,15 @@ export async function hashPassword(password: string): Promise<string> {
 
 export async function validatePassword(password: string, hash: string): Promise<boolean> {
   return bcrypt.compare(password, hash);
+}
+
+// bcrypt hash of a value nobody knows. Comparing against it costs the same as a
+// real check, so "no such account" and "wrong password" take the same time and
+// response latency stops revealing which addresses are registered.
+const DUMMY_HASH = bcrypt.hashSync(crypto.randomBytes(32).toString('hex'), BCRYPT_ROUNDS);
+
+export async function burnPasswordComparison(password: string): Promise<void> {
+  await bcrypt.compare(password, DUMMY_HASH);
 }
 
 export interface TokenPair {

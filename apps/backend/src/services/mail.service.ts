@@ -54,7 +54,24 @@ const COPY: Record<MailLocale, Copy> = {
   },
 };
 
-function renderHtml(c: Copy, name: string, url: string): string {
+/**
+ * The display name is user-controlled and lands inside the mail body. Without
+ * escaping, a user could register as `<a href="http://evil">Click</a>` and get
+ * their own link rendered inside an email that carries our branding.
+ */
+export function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function renderHtml(c: Copy, rawName: string, rawUrl: string): string {
+  const name = escapeHtml(rawName);
+  const url = escapeHtml(rawUrl);
+
   // Inline CSS, one CTA, no images, no tracking pixel — keeps spam scores low.
   return `<!doctype html>
 <html lang="tr">
