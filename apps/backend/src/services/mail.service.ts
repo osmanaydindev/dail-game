@@ -33,6 +33,29 @@ interface Copy {
   ignore: string;
 }
 
+const RESET_COPY: Record<MailLocale, Copy> = {
+  tr: {
+    subject: 'Aydınlar Oynuyor — şifre sıfırlama',
+    heading: 'Şifreni sıfırla',
+    intro: (name) => `Merhaba ${name}, hesabın için şifre sıfırlama talebi aldık.`,
+    cta: 'Yeni şifre belirle',
+    fallback: 'Buton çalışmazsa bu adresi tarayıcına yapıştır:',
+    expiry: 'Bu bağlantı 1 saat geçerlidir ve yalnızca bir kez kullanılabilir.',
+    ignore:
+      'Bu talebi sen yapmadıysan bu e-postayı yok sayabilirsin — şifren değişmez. Endişeleniyorsan şifreni değiştirmeni öneririz.',
+  },
+  en: {
+    subject: 'Aydınlar Oynuyor — password reset',
+    heading: 'Reset your password',
+    intro: (name) => `Hi ${name}, we received a password reset request for your account.`,
+    cta: 'Set a new password',
+    fallback: "If the button doesn't work, paste this address into your browser:",
+    expiry: 'This link is valid for 1 hour and can only be used once.',
+    ignore:
+      "If you didn't request this, you can ignore this email — your password stays the same. If you are concerned, change your password.",
+  },
+};
+
 const COPY: Record<MailLocale, Copy> = {
   tr: {
     subject: 'Aydınlar Oynuyor — e-posta adresini doğrula',
@@ -111,16 +134,13 @@ function renderText(c: Copy, name: string, url: string): string {
   ].join('\n');
 }
 
-export async function sendVerificationEmail(
+async function send(
   to: string,
   displayName: string,
-  token: string,
-  locale: MailLocale = 'tr',
+  c: Copy,
+  url: string,
+  logLabel: string,
 ): Promise<void> {
-  const c = COPY[locale] ?? COPY.tr;
-  const prefix = locale === 'en' ? '' : `/${locale}`;
-  const url = `${env.FRONTEND_URL}${prefix}/verify-email?token=${encodeURIComponent(token)}`;
-
   const mail = {
     from: env.MAIL_FROM,
     replyTo: env.MAIL_REPLY_TO,
@@ -132,8 +152,33 @@ export async function sendVerificationEmail(
 
   const tx = getTransporter();
   if (!tx) {
-    console.warn('[mail] SMTP_HOST not configured — verification link:', url);
+    console.warn(`[mail] SMTP_HOST not configured — ${logLabel}:`, url);
     return;
   }
   await tx.sendMail(mail);
+}
+
+function linkFor(path: string, token: string, locale: MailLocale): string {
+  const prefix = locale === 'en' ? '' : `/${locale}`;
+  return `${env.FRONTEND_URL}${prefix}/${path}?token=${encodeURIComponent(token)}`;
+}
+
+export async function sendVerificationEmail(
+  to: string,
+  displayName: string,
+  token: string,
+  locale: MailLocale = 'tr',
+): Promise<void> {
+  const c = COPY[locale] ?? COPY.tr;
+  await send(to, displayName, c, linkFor('verify-email', token, locale), 'verification link');
+}
+
+export async function sendPasswordResetEmail(
+  to: string,
+  displayName: string,
+  token: string,
+  locale: MailLocale = 'tr',
+): Promise<void> {
+  const c = RESET_COPY[locale] ?? RESET_COPY.tr;
+  await send(to, displayName, c, linkFor('reset-password', token, locale), 'password reset link');
 }

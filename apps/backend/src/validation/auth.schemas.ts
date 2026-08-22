@@ -33,7 +33,27 @@ export const resendVerificationSchema = z.object({
   locale: z.enum(['tr', 'en']).default('tr'),
 });
 
+export const forgotPasswordSchema = z.object({
+  email: EMAIL,
+  locale: z.enum(['tr', 'en']).default('tr'),
+});
+
+export const resetPasswordSchema = z
+  .object({
+    // Same shape check as verifyEmail — malformed tokens never reach the DB.
+    token: z.string().length(96).regex(/^[a-f0-9]+$/),
+    password: PASSWORD,
+  })
+  .superRefine((v, ctx) => {
+    // The username/email checks need those values, which a reset request does
+    // not carry, so only the common-password blocklist applies here.
+    const weak = isWeakPassword(v.password, '', '');
+    if (weak) ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['password'], message: weak });
+  });
+
 export type LoginInput = z.infer<typeof loginSchema>;
 export type RegisterInput = z.infer<typeof registerSchema>;
 export type VerifyEmailInput = z.infer<typeof verifyEmailSchema>;
 export type ResendVerificationInput = z.infer<typeof resendVerificationSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;

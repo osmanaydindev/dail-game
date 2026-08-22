@@ -183,6 +183,11 @@ avatarUrl, isActive, emailVerified, createdAt, updatedAt, createdBy (admin userI
 _id, userId, tokenHash (sha256), expiresAt (TTL index), usedAt, createdAt
 ```
 
+### PasswordResetToken
+```
+_id, userId, tokenHash (sha256), expiresAt (TTL index), usedAt, requestedIp, createdAt
+```
+
 ### Game
 ```
 _id, slug (wordle|parolla), name, officialUrl,
@@ -229,6 +234,49 @@ POST /auth/verify-email {token}  →  emailVerified:true + issueTokens (auto-log
 - Accounts created by an admin or the seed script get `emailVerified: true`. The seed
   also backfills `emailVerified: true` on any user document that predates this field —
   run `npm run seed` once after deploying, or existing users are locked out.
+
+### Password Reset
+
+```
+POST /auth/forgot-password  →  PasswordResetToken (sha256, 1h TTL) → reset mail
+POST /auth/reset-password   →  new password + EVERY refresh token revoked
+```
+
+- Deliberately a **separate collection** from `VerificationToken`: a token minted
+  to confirm an address must never be usable to change a password, and separate
+  collections enforce that by construction rather than by remembering to filter.
+- 1 hour TTL, not 24 — a reset link is a live key to the account.
+- Reset **revokes every refresh token** for the user. If the reset was triggered
+  because someone else got in, this is what actually kicks them out. The reset
+  does not log the user in; they sign in again with the new password.
+- A successful reset also sets `emailVerified` — reading the inbox proves ownership.
+- Refuses to reuse the current password (`SAME_PASSWORD`), and leaves the token
+  unspent in that case so the user can retry.
+- Unverified accounts get the *verification* mail instead of a reset link —
+  sending a reset link to an address nobody has proven they own hands over the
+  account.
+- `forgot-password` and `reset-password` have their **own** rate limiter
+  instance. Sharing one with registration would mean a burst of signup attempts
+  locks a user out of password recovery, which is exactly when they need it.
+- Per-account 60s cooldown in `issuePasswordResetToken` on top of the per-IP
+  limit, so an attacker rotating IPs still cannot flood one victim's inbox.
+
+### Anti-Enumeration & Timing
+
+Every endpoint that takes an email address returns an identical body whether or
+not the account exists. That is not enough on its own — the *work* differs, and
+the difference is measurable:
+
+- `register` hashes the password **before** the existence check. bcrypt costs
+  ~250ms, so hashing only for new accounts would make "email already taken"
+  answer far faster than "account created", even though both return 201.
+- `login` calls `burnPasswordComparison` when no user is found, so "no such
+  account" and "wrong password" both cost a bcrypt compare (~285ms each).
+- `forgot-password` and `resend-verification` pad their response to a 150ms
+  floor via `utils/timing.ts`, and fire the mail without awaiting it, so the
+  response time depends on neither the DB hit nor the SMTP relay.
+
+Measured before/after on `forgot-password`: 11ms vs 3ms → 154ms vs 155ms.
 
 ### Mail Delivery (free, without landing in spam)
 
@@ -280,6 +328,8 @@ an `.env` change plus that provider's DNS records — no code change.
 POST   /api/auth/register             # Public (rate limited 5/hour/IP)
 POST   /api/auth/verify-email         # Public — consumes token, logs user in
 POST   /api/auth/resend-verification  # Public (rate limited 5/hour/IP)
+POST   /api/auth/forgot-password      # Public (own 5/hour/IP limiter + 60s per-account cooldown)
+POST   /api/auth/reset-password       # Public — revokes every session on success
 POST   /api/auth/login                # Public
 POST   /api/auth/logout               # Auth
 POST   /api/auth/refresh              # Public (uses cookie)
@@ -356,6 +406,10 @@ GET    /api/admin/stats         # Admin dashboard stats
 | Brute-force login | Rate limit on /auth/login (30 req/15min per IP) |
 | Mail bombing via signup | `registerLimiter` — 5 req/hour per IP on /auth/register and /auth/resend-verification |
 | Verification token replay | Single-use (`usedAt`), sha256-hashed in DB, 24h TTL index; issuing a new token invalidates outstanding ones |
+| Reset-link interception | 1h TTL, single use, separate collection from verification tokens; frontend strips the token from the URL so it never leaks via Referer or history |
+| Attacker keeping access after victim resets | Reset revokes every refresh token for the account |
+| Account enumeration by response time | bcrypt runs on both branches of register and login; mail endpoints padded to a 150ms floor (`utils/timing.ts`) |
+| Inbox flooding one victim | 60s per-account cooldown in `issuePasswordResetToken`, on top of the per-IP limiter |
 | Privilege escalation via signup | `registerSchema` has no `role` field — self-registration always yields `role: 'user'` |
 | Token theft (XSS) | Access token in memory only; refresh in httpOnly cookie |
 | CSRF on cookie-based refresh | SameSite=Strict cookie; CSRF token optional for v2 |
@@ -532,5 +586,8 @@ Frontend:
 4. All timestamps stored in UTC. Display timezone = UTC for v1.
 5. DNF in Wordle is represented as `attempt = 7` in the DB.
 6. Avatar is URL-only in v1; file upload deferred.
-7. Password reset ("forgot password") is not implemented — admins reset via
-   `PATCH /api/admin/users/:id/password`.
+7. Password reset is self-service via emailed link; admins can still force a
+   reset with `PATCH /api/admin/users/:id/password`.
+8. Rate limiting is in-process memory. It resets when the container restarts and
+   counts per-instance, so scaling past one backend replica needs a shared store
+   (Redis) before the limits mean anything.

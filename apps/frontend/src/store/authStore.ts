@@ -14,6 +14,8 @@ interface AuthState {
   register(input: RegisterRequest): Promise<void>;
   verifyEmail(token: string): Promise<void>;
   resendVerification(email: string, locale: 'tr' | 'en'): Promise<void>;
+  forgotPassword(email: string, locale: 'tr' | 'en'): Promise<void>;
+  resetPassword(token: string, password: string): Promise<void>;
   logout(): Promise<void>;
   refresh(): Promise<boolean>;
   updateUser(updates: Partial<UserSelf>): void;
@@ -64,6 +66,18 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   async resendVerification(email: string, locale: 'tr' | 'en'): Promise<void> {
     await api.post('/auth/resend-verification', { email, locale });
+  },
+
+  async forgotPassword(email: string, locale: 'tr' | 'en'): Promise<void> {
+    await api.post('/auth/forgot-password', { email, locale });
+  },
+
+  // Deliberately does not log the user in: the reset revokes every session on
+  // the account, so they sign in again with the new password.
+  async resetPassword(token: string, password: string): Promise<void> {
+    await api.post('/auth/reset-password', { token, password });
+    setAccessToken(null);
+    set({ user: null, accessToken: null });
   },
 
   async logout(): Promise<void> {

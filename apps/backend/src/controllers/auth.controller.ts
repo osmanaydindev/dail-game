@@ -9,12 +9,21 @@ import {
   revokeRefreshToken,
   issueVerificationToken,
   consumeVerificationToken,
+  issuePasswordResetToken,
+  resetPasswordWithToken,
 } from '../services/auth.service';
-import { sendVerificationEmail, type MailLocale } from '../services/mail.service';
+import { sendVerificationEmail, sendPasswordResetEmail, type MailLocale } from '../services/mail.service';
 import { ok, created, badRequest, unauthorized, forbidden, conflict, serverError } from '../utils/response';
 import { env } from '../config/env';
+import { padResponseTime } from '../utils/timing';
 import type { IUser } from '../models/User';
-import type { RegisterInput, VerifyEmailInput, ResendVerificationInput } from '../validation/auth.schemas';
+import type {
+  RegisterInput,
+  VerifyEmailInput,
+  ResendVerificationInput,
+  ForgotPasswordInput,
+  ResetPasswordInput,
+} from '../validation/auth.schemas';
 
 const COOKIE_NAME = '__refresh';
 
@@ -99,6 +108,12 @@ export async function register(req: Request, res: Response): Promise<void> {
     const { email, password, username, displayName, locale } = req.body as RegisterInput;
     const normalizedEmail = email.toLowerCase();
 
+    // Hashed before the existence check on purpose. bcrypt costs ~250ms, so
+    // running it only for new accounts would make "email already registered"
+    // answer far faster than "account created" — an enumeration oracle even
+    // though both return 201.
+    const passwordHash = await hashPassword(password);
+
     const existing = await User.findOne({ $or: [{ email: normalizedEmail }, { username }] });
     if (existing) {
       // Username collisions are safe to report (usernames are public); email
@@ -116,7 +131,7 @@ export async function register(req: Request, res: Response): Promise<void> {
       email: normalizedEmail,
       username,
       displayName,
-      passwordHash: await hashPassword(password),
+      passwordHash,
       role: 'user',
       emailVerified: false,
     });
@@ -155,16 +170,86 @@ export async function verifyEmail(req: Request, res: Response): Promise<void> {
 }
 
 export async function resendVerification(req: Request, res: Response): Promise<void> {
+  const startedAt = Date.now();
   try {
     const { email, locale } = req.body as ResendVerificationInput;
 
     const user = await User.findOne({ email: email.toLowerCase(), isActive: true });
-    if (user && !user.emailVerified) await deliverVerificationMail(user, locale);
+    // Not awaited: the response must not wait on the SMTP relay, so its timing
+    // stays independent of whether a mail was actually sent.
+    if (user && !user.emailVerified) void deliverVerificationMail(user, locale);
 
-    // Always the same response — no account enumeration.
+    // Always the same response and the same timing — no account enumeration.
+    await padResponseTime(startedAt);
     ok(res, null, 'Verification email sent if the account needs it');
   } catch (err) {
     console.error('[auth.resendVerification]', err);
+    await padResponseTime(startedAt);
+    serverError(res);
+  }
+}
+
+export async function forgotPassword(req: Request, res: Response): Promise<void> {
+  const startedAt = Date.now();
+  try {
+    const { email, locale } = req.body as ForgotPasswordInput;
+
+    const user = await User.findOne({ email, isActive: true });
+
+    // Unverified accounts get the verification mail instead — sending a reset
+    // link to an address nobody has proven they own would hand out the account.
+    if (user) {
+      const ip = req.ip;
+      if (!user.emailVerified) {
+        void deliverVerificationMail(user, locale);
+      } else {
+        // Not awaited on purpose: the response time must not depend on whether
+        // an account exists or on how slow the SMTP relay is today.
+        void (async () => {
+          try {
+            const token = await issuePasswordResetToken(user._id as never, ip);
+            // null means one was already sent within the cooldown.
+            if (token) await sendPasswordResetEmail(user.email, user.displayName, token, locale);
+          } catch (err) {
+            console.error('[auth.forgotPassword.mail]', err);
+          }
+        })();
+      }
+    }
+
+    // Identical response and identical timing in every case — a database hit
+    // costs measurably more than a miss, which would otherwise leak which
+    // addresses are registered.
+    await padResponseTime(startedAt);
+    ok(res, null, 'If that account exists, a reset link is on its way');
+  } catch (err) {
+    console.error('[auth.forgotPassword]', err);
+    await padResponseTime(startedAt);
+    serverError(res);
+  }
+}
+
+export async function resetPassword(req: Request, res: Response): Promise<void> {
+  try {
+    const { token, password } = req.body as ResetPasswordInput;
+
+    const result = await resetPasswordWithToken(token, password);
+    if (!result.ok) {
+      badRequest(
+        res,
+        result.reason === 'same_password'
+          ? 'SAME_PASSWORD'
+          : 'Invalid or expired reset link',
+      );
+      return;
+    }
+
+    // Every session was revoked, so the cookie in this browser is dead too —
+    // clear it rather than leave a stale one behind.
+    res.clearCookie(COOKIE_NAME, { path: '/api/auth' });
+    ok(res, null, 'Password updated');
+  } catch (err) {
+    console.error('[auth.resetPassword]', err);
     serverError(res);
   }
 }

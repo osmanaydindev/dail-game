@@ -26,6 +26,9 @@ const schema = z.object({
   MAIL_FROM: z.string().default('Aydınlar Oynuyor <noreply@localhost>'),
   MAIL_REPLY_TO: z.string().email().optional(),
   EMAIL_VERIFICATION_TTL_MS: z.coerce.number().default(86_400_000), // 24 hours
+  // Much shorter than email verification: a reset link is a live key to the
+  // account, so its window of usefulness if intercepted must be small.
+  PASSWORD_RESET_TTL_MS: z.coerce.number().default(3_600_000), // 1 hour
 });
 
 const parsed = schema.safeParse(process.env);

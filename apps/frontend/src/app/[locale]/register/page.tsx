@@ -9,6 +9,7 @@ import { Link } from '@/lib/navigation';
 import { useLocale, useTranslations } from 'next-intl';
 import { useAuthStore } from '@/store/authStore';
 import { PasswordInput } from '@/components/ui/PasswordInput';
+import { PasswordRules } from '@/components/ui/PasswordRules';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
 
@@ -45,28 +46,6 @@ const schema = z
   });
 
 type FormValues = z.infer<typeof schema>;
-
-/** Live checklist — mirrors the PASSWORD schema on the backend exactly. */
-function PasswordRules({ value, labels }: { value: string; labels: Record<string, string> }) {
-  const rules = [
-    { key: 'len', ok: value.length >= 8, label: labels.len },
-    { key: 'letter', ok: /\p{L}/u.test(value), label: labels.letter },
-    { key: 'digit', ok: /\d/.test(value), label: labels.digit },
-  ];
-
-  return (
-    <VStack gap={1} align="stretch" mt={2}>
-      {rules.map((r) => (
-        <HStack key={r.key} gap={2} fontSize="xs">
-          <Text color={r.ok ? '#538d4e' : 'text.muted'} w="14px" lineHeight={1.4}>
-            {r.ok ? '✓' : '•'}
-          </Text>
-          <Text color={r.ok ? '#538d4e' : 'text.muted'}>{r.label}</Text>
-        </HStack>
-      ))}
-    </VStack>
-  );
-}
 
 export default function RegisterPage() {
   const t = useTranslations('auth');

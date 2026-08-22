@@ -14,7 +14,7 @@ function VerifyEmailInner() {
   const locale = useLocale() as 'tr' | 'en';
   const router = useRouter();
   const params = useSearchParams();
-  const token = params.get('token');
+  const [token] = useState(() => params.get('token'));
   const { verifyEmail, resendVerification } = useAuthStore();
 
   const [status, setStatus] = useState<Status>(token ? 'verifying' : 'failed');
@@ -30,6 +30,9 @@ function VerifyEmailInner() {
   useEffect(() => {
     if (!token || attempted.current) return;
     attempted.current = true;
+
+    // Keep the token out of the Referer header and browser history.
+    window.history.replaceState(null, '', window.location.pathname);
 
     verifyEmail(token)
       .then(() => {

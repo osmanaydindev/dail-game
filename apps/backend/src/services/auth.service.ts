@@ -4,6 +4,7 @@ import type mongoose from 'mongoose';
 import { User } from '../models/User';
 import { RefreshToken } from '../models/RefreshToken';
 import { VerificationToken } from '../models/VerificationToken';
+import { PasswordResetToken } from '../models/PasswordResetToken';
 import { signAccessToken } from '../utils/jwt';
 import { generateOpaqueToken, hashToken } from '../utils/crypto';
 import { env } from '../config/env';
@@ -115,4 +116,85 @@ export async function consumeVerificationToken(rawToken: string): Promise<IUser 
     await user.save();
   }
   return user;
+}
+
+// ─── Password reset ──────────────────────────────────────────────────────────
+
+/** Refuse to mint a second reset token this soon after the last one. */
+const RESET_COOLDOWN_MS = 60_000;
+
+/**
+ * Returns the raw token, or null when a token was already issued within the
+ * cooldown. The cooldown is per-account, so a distributed attacker who can
+ * rotate IPs past the per-IP rate limit still cannot flood one victim's inbox.
+ */
+export async function issuePasswordResetToken(
+  userId: mongoose.Types.ObjectId,
+  ip?: string,
+): Promise<string | null> {
+  const recent = await PasswordResetToken.findOne({
+    userId,
+    usedAt: { $exists: false },
+    createdAt: { $gt: new Date(Date.now() - RESET_COOLDOWN_MS) },
+  });
+  if (recent) return null;
+
+  // Requesting a new link invalidates any older one still sitting in the inbox.
+  await PasswordResetToken.updateMany(
+    { userId, usedAt: { $exists: false } },
+    { usedAt: new Date() },
+  );
+
+  const rawToken = generateOpaqueToken();
+  await PasswordResetToken.create({
+    userId,
+    tokenHash: hashToken(rawToken),
+    expiresAt: new Date(Date.now() + env.PASSWORD_RESET_TTL_MS),
+    requestedIp: ip,
+  });
+  return rawToken;
+}
+
+export type ResetOutcome =
+  | { ok: true }
+  | { ok: false; reason: 'invalid' | 'same_password' };
+
+/**
+ * Consumes a reset token and sets the new password. Every refresh token for the
+ * account is revoked: if the reset was triggered because someone else got in,
+ * this is what actually kicks them out.
+ */
+export async function resetPasswordWithToken(
+  rawToken: string,
+  newPassword: string,
+): Promise<ResetOutcome> {
+  const record = await PasswordResetToken.findOne({
+    tokenHash: hashToken(rawToken),
+    usedAt: { $exists: false },
+  });
+  if (!record || record.expiresAt < new Date()) return { ok: false, reason: 'invalid' };
+
+  const user = await User.findById(record.userId).select('+passwordHash');
+  if (!user || !user.isActive) return { ok: false, reason: 'invalid' };
+
+  if (await bcrypt.compare(newPassword, user.passwordHash)) {
+    // Leave the token unspent so the user can retry with a different password.
+    return { ok: false, reason: 'same_password' };
+  }
+
+  record.usedAt = new Date();
+  await record.save();
+
+  user.passwordHash = await hashPassword(newPassword);
+  // Someone who can read the inbox has proven ownership of the address, so a
+  // successful reset also completes email verification.
+  user.emailVerified = true;
+  await user.save();
+
+  await RefreshToken.updateMany(
+    { userId: user._id, revokedAt: { $exists: false } },
+    { revokedAt: new Date() },
+  );
+
+  return { ok: true };
 }

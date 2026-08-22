@@ -9,15 +9,22 @@ export const authLimiter = rateLimit({
   skipSuccessfulRequests: false,
 });
 
-// Tighter than authLimiter: every request here can send an email, so this is
-// the mail-bombing guard, not just a brute-force guard.
-export const registerLimiter = rateLimit({
-  windowMs: 60 * 60 * 1000, // 1 hour
-  max: 5,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { success: false, error: 'Too many attempts, please try again later.' },
-});
+// Tighter than authLimiter: every request here can send an email, so these are
+// mail-bombing guards, not just brute-force guards.
+const mailLimiter = () =>
+  rateLimit({
+    windowMs: 60 * 60 * 1000, // 1 hour
+    max: 5,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { success: false, error: 'Too many attempts, please try again later.' },
+  });
+
+// Separate instances on purpose — each rateLimit() call owns its own counter.
+// Sharing one would mean a burst of signup attempts also locks the user out of
+// password recovery, which is exactly when they need it.
+export const registerLimiter = mailLimiter();
+export const passwordResetLimiter = mailLimiter();
 
 export const apiLimiter = rateLimit({
   windowMs: 60 * 1000, // 1 minute

@@ -140,6 +140,12 @@ export default function LoginPage() {
           </form>
 
           <VStack gap={4}>
+            <Link href="/forgot-password">
+              <Text fontSize="sm" color="text.muted" _hover={{ color: 'brand.500' }}>
+                {t('forgotPassword')}
+              </Text>
+            </Link>
+
             <HStack justify="center" gap={2} fontSize="sm">
               <Text color="text.muted">{t('noAccount')}</Text>
               <Link href="/register">

@@ -97,6 +97,8 @@ Higher score = better ranking. Ties broken by earliest submission.
 POST   /api/auth/register             Self-registration (sends verification email)
 POST   /api/auth/verify-email         Verify email via token, logs the user in
 POST   /api/auth/resend-verification  Resend the verification email
+POST   /api/auth/forgot-password      Email a password reset link (1h, single use)
+POST   /api/auth/reset-password       Set a new password, revoking every session
 POST   /api/auth/login                Login (403 EMAIL_NOT_VERIFIED if unverified)
 POST   /api/auth/refresh              Refresh access token (uses httpOnly cookie)
 POST   /api/auth/logout               Logout
@@ -143,6 +145,10 @@ No core schema changes required.
 - Passwords hashed with bcrypt (rounds=12)
 - Refresh tokens stored as SHA-256 hashes, rotated on every use
 - Verification tokens stored as SHA-256 hashes, single-use, 24h TTL index
+- Password reset tokens: separate collection, SHA-256, single-use, 1h TTL, and a
+  successful reset revokes every refresh token on the account
+- Endpoints taking an email address are constant-response *and* constant-time
+  (see "Anti-Enumeration & Timing" in CLAUDE.md)
 - Rate limiting: 30 auth attempts / 15 min per IP; 5 registration or resend
   requests / hour per IP (each of those can send an email)
 - Registration never reveals whether an email is already in use; usernames are
