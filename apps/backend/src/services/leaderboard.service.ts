@@ -2,6 +2,7 @@ import { DailyEntry } from '../models/DailyEntry';
 import type { PipelineStage } from 'mongoose';
 import type { LeaderboardEntry, DailyLeaderboard } from '@dail-game/types';
 import type { GameSlug } from '@dail-game/types';
+import { SCORE_WEIGHTS } from '../config/gameConfig';
 
 interface EntryWithUser {
   _id: string;
@@ -61,7 +62,9 @@ export async function getDailyLeaderboard(date: string): Promise<DailyLeaderboar
       username: u.username,
       displayName: u.displayName,
       avatarUrl: u.avatarUrl,
-      normalizedScore: parseFloat(((u.wordle * 0.5) + (u.parolla * 0.5)).toFixed(4)),
+      normalizedScore: parseFloat(
+        ((u.wordle * SCORE_WEIGHTS.wordle) + (u.parolla * SCORE_WEIGHTS.parolla)).toFixed(4),
+      ),
     }))
     .sort((a, b) => b.normalizedScore - a.normalizedScore)
     .map((e, i) => ({ ...e, rank: i + 1 }));
@@ -81,16 +84,53 @@ export async function getPeriodLeaderboard(
   const matchStage: Record<string, unknown> = { ...dateFilter };
   if (gameSlug) matchStage.gameSlug = gameSlug;
 
+  // Per-game tab: plain average of that game's own normalized scores.
+  // Total tab: rebuild each day's weighted daily score first, then average the days —
+  // otherwise a user who only plays one game gets averaged on a different scale than
+  // the daily leaderboard uses.
+  const groupStages: PipelineStage[] = gameSlug
+    ? [
+        {
+          $group: {
+            _id: '$userId',
+            avgScore: { $avg: '$normalizedScore' },
+            entryCount: { $sum: 1 },
+            earliestEntry: { $min: '$createdAt' },
+          },
+        },
+      ]
+    : [
+        {
+          $group: {
+            _id: { userId: '$userId', date: '$date' },
+            wordle: { $sum: { $cond: [{ $eq: ['$gameSlug', 'wordle'] }, '$normalizedScore', 0] } },
+            parolla: { $sum: { $cond: [{ $eq: ['$gameSlug', 'parolla'] }, '$normalizedScore', 0] } },
+            earliestEntry: { $min: '$createdAt' },
+          },
+        },
+        {
+          $addFields: {
+            dailyScore: {
+              $add: [
+                { $multiply: ['$wordle', SCORE_WEIGHTS.wordle] },
+                { $multiply: ['$parolla', SCORE_WEIGHTS.parolla] },
+              ],
+            },
+          },
+        },
+        {
+          $group: {
+            _id: '$_id.userId',
+            avgScore: { $avg: '$dailyScore' },
+            entryCount: { $sum: 1 },
+            earliestEntry: { $min: '$earliestEntry' },
+          },
+        },
+      ];
+
   const pipeline: PipelineStage[] = [
     { $match: matchStage },
-    {
-      $group: {
-        _id: '$userId',
-        avgScore: { $avg: '$normalizedScore' },
-        entryCount: { $sum: 1 },
-        earliestEntry: { $min: '$createdAt' },
-      },
-    },
+    ...groupStages,
     { $sort: { avgScore: -1, earliestEntry: 1 } },
     {
       $lookup: {
