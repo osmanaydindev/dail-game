@@ -113,7 +113,8 @@ Shared types package avoids type drift between client and server.
 ## Scoring System
 
 ### Goal
-Fair equal-weight (50/50) combination of Wordle and Parolla scores into a single daily score.
+Weighted (Wordle 40 / Parolla 60) combination of Wordle and Parolla scores into a single daily score.
+Parolla carries more weight because it is the longer and harder game (5 minutes, 26 letters).
 
 ### Wordle Normalization
 Wordle raw score = attempt number (1–6). Lower is better. DNF = 7 (worst).
@@ -133,12 +134,12 @@ wordle_normalized = (7 - attempt) / 6
 | DNF     | 0.000     |
 
 ### Parolla Normalization
-Parolla raw scores: `correct`, `wrong`, `blank` (must sum to total tiles = 16 in standard Parolla).
-The formula does not assume a fixed total — it derives it dynamically.
+Parolla raw scores: `correct`, `wrong`, `blank` (26 letters of the Turkish alphabet).
+Wrong answers are penalized: every 3 wrong answers cancel out 1 correct.
 
 ```
-total = correct + wrong + blank
-parolla_normalized = correct / total   (if total = 0, result = 0)
+effective = max(0, correct - wrong / 3)
+parolla_normalized = effective / 26
 ```
 
 Range: [0.0, 1.0]. Higher = better.
@@ -146,9 +147,10 @@ Range: [0.0, 1.0]. Higher = better.
 ### Combined Daily Score
 
 ```
-daily_score = (wordle_normalized × 0.5) + (parolla_normalized × 0.5)
+daily_score = (wordle_normalized × 0.4) + (parolla_normalized × 0.6)
 ```
 
+Weights live in a single place — `SCORE_WEIGHTS` in `apps/backend/src/config/gameConfig.ts`.
 Range: [0.0, 1.0]. Used for the **total daily leaderboard**.
 
 ### Leaderboard Ranking
@@ -156,11 +158,14 @@ Range: [0.0, 1.0]. Used for the **total daily leaderboard**.
 - Total leaderboard uses `daily_score`.
 - Ties are broken by entry `createdAt` (earlier submission wins).
 - If a user submits only one game, they receive 0 for the missing game in the total score.
+- **Weekly/monthly total** rebuilds each day's weighted `daily_score` first, then averages
+  across days — so it ranks on the same scale as the daily leaderboard. The per-game
+  weekly/monthly tabs average that game's own normalized scores directly.
 
 ### Justification
-Linear normalization maps each game's raw scores to [0,1] with equal weight.
+Linear normalization maps each game's raw scores to [0,1].
 Wordle's ordinal scale (1–6 attempts) maps cleanly to a linear progression.
-Parolla's ratio score (correct/total) is naturally [0,1].
+Parolla's penalized ratio score is naturally [0,1].
 Neither formula requires external calibration or historical data.
 
 ---
@@ -169,8 +174,13 @@ Neither formula requires external calibration or historical data.
 
 ### User
 ```
-_id, email, displayName, passwordHash, role (admin|user),
-avatarUrl, createdAt, updatedAt, createdBy (admin userId)
+_id, email, username, displayName, passwordHash, role (admin|user),
+avatarUrl, isActive, emailVerified, createdAt, updatedAt, createdBy (admin userId)
+```
+
+### VerificationToken
+```
+_id, userId, tokenHash (sha256), expiresAt (TTL index), usedAt, createdAt
 ```
 
 ### Game
@@ -193,6 +203,65 @@ _id, userId, tokenHash, expiresAt, createdAt, revokedAt, userAgent, ip
 
 ---
 
+## Registration & Email Verification
+
+Registration is **open to the public**. Admin approval is not required — a verified
+email address is the only gate.
+
+```
+POST /auth/register  →  User{emailVerified:false} + VerificationToken (sha256, 24h TTL)
+                     →  verification mail
+      ↓  user clicks the link
+POST /auth/verify-email {token}  →  emailVerified:true + issueTokens (auto-login)
+```
+
+- `POST /auth/login` returns **403 with `error: "EMAIL_NOT_VERIFIED"`** for unverified
+  accounts — but only *after* the password check, so the response can't be used to
+  enumerate registered addresses. The frontend keys off that exact string to show a
+  "resend verification mail" button.
+- Registration never reveals whether an email is taken (it returns the same 201 and
+  quietly re-sends the verification mail if the existing account is unverified).
+  Usernames *are* public, so username collisions do return 409.
+- `registerSchema` deliberately has no `role` field — self-registration always yields
+  `role: 'user'`.
+- `issueVerificationToken` invalidates outstanding tokens, so requesting a new mail
+  kills the old link. Tokens are single-use (`usedAt`) and expire via a Mongo TTL index.
+- Accounts created by an admin or the seed script get `emailVerified: true`. The seed
+  also backfills `emailVerified: true` on any user document that predates this field —
+  run `npm run seed` once after deploying, or existing users are locked out.
+
+### Mail Delivery (free, without landing in spam)
+
+`services/mail.service.ts` talks plain SMTP through nodemailer, so the provider is a
+pure `.env` concern. Default target is **Resend** (free tier: 3000/month, 100/day).
+When `SMTP_HOST` is unset the verification link is logged to the console instead of
+sent — that is the local-development path.
+
+Deliverability rules baked into the sender:
+- Both `text/plain` and `text/html` bodies (HTML-only mail scores as spam on its own).
+- One CTA, inline CSS, no images, no tracking pixel, no link shortener.
+- `MAIL_REPLY_TO` should be a real, monitored mailbox.
+
+DNS records Resend asks for (names are relative to the apex zone; copy the exact
+values out of the dashboard — they are truncated in the table view):
+
+| Record | Name | Purpose |
+|--------|------|---------|
+| `TXT` | `resend._domainkey.send` | DKIM signature |
+| `CNAME` | `rsend.send` | SPF / return-path (Resend delegates it, no TXT SPF record) |
+| `CNAME` | `send.send` | SPF / return-path |
+| `TXT` | `_dmarc` | `v=DMARC1; p=none;` — optional, and it lands on the **apex** domain, so skip it if one already exists |
+
+"Enable Receiving" stays off — this app only sends, so no MX record is needed.
+The verified domain is `send.<domain>`, and `MAIL_FROM` must use an address on it
+(`noreply@send.<domain>`) or Resend rejects the send. Sending from the subdomain
+keeps the apex domain's reputation isolated.
+Verify with Gmail's "Show original" (SPF/DKIM/DMARC must all read `PASS`) and
+mail-tester.com (target ≥ 9/10). Switching to Brevo, Zoho or a self-hosted Postfix is
+an `.env` change plus that provider's DNS records — no code change.
+
+---
+
 ## Auth / Session Strategy
 
 - **Access token**: JWT, 15-minute TTL, signed with `ACCESS_TOKEN_SECRET`.
@@ -208,9 +277,12 @@ _id, userId, tokenHash, expiresAt, createdAt, revokedAt, userAgent, ip
 ## API Route Map
 
 ```
-POST   /api/auth/login          # Public
-POST   /api/auth/logout         # Auth
-POST   /api/auth/refresh        # Public (uses cookie)
+POST   /api/auth/register             # Public (rate limited 5/hour/IP)
+POST   /api/auth/verify-email         # Public — consumes token, logs user in
+POST   /api/auth/resend-verification  # Public (rate limited 5/hour/IP)
+POST   /api/auth/login                # Public
+POST   /api/auth/logout               # Auth
+POST   /api/auth/refresh              # Public (uses cookie)
 
 GET    /api/users/me            # Auth
 PATCH  /api/users/me            # Auth (displayName, avatarUrl)
@@ -281,7 +353,10 @@ GET    /api/admin/stats         # Admin dashboard stats
 
 | Threat | Mitigation |
 |--------|-----------|
-| Brute-force login | Rate limit on /auth/login (5 req/15min) |
+| Brute-force login | Rate limit on /auth/login (30 req/15min per IP) |
+| Mail bombing via signup | `registerLimiter` — 5 req/hour per IP on /auth/register and /auth/resend-verification |
+| Verification token replay | Single-use (`usedAt`), sha256-hashed in DB, 24h TTL index; issuing a new token invalidates outstanding ones |
+| Privilege escalation via signup | `registerSchema` has no `role` field — self-registration always yields `role: 'user'` |
 | Token theft (XSS) | Access token in memory only; refresh in httpOnly cookie |
 | CSRF on cookie-based refresh | SameSite=Strict cookie; CSRF token optional for v2 |
 | Refresh token replay | DB-stored hash; rotation invalidates old token immediately |
@@ -290,6 +365,7 @@ GET    /api/admin/stats         # Admin dashboard stats
 | Malicious avatar URL | Validated HTTPS URL; no file execution |
 | Score manipulation | All normalization done server-side; client sends raw scores only |
 | Data enumeration | User list is admin-only; public endpoints show display names only |
+| Email enumeration via signup | /auth/register returns the same 201 for a taken email; /auth/resend-verification always returns 200; the unverified 403 on login fires only after the password check |
 
 ---
 
@@ -328,6 +404,7 @@ Seed is idempotent — safe to run multiple times.
 | 6     | ✅ Done | Zod validation, rate limiting, helmet, CORS, DB indexes, error handling |
 | 7     | ✅ Done | README, .env.example, seed instructions, API summary, PM2/Docker deploy |
 | 8     | ✅ Done | next-intl v4 `[locale]` routing, TR/EN dil değiştirici, tablo raw score sütunu, next-themes color mode |
+| 9     | ✅ Done | Tavla/Kızma Birader navbar'dan çıktı, puan ağırlığı 40/60, Parolla ekran içi klavye, açık kayıt + mail doğrulama |
 
 ## Önemli Notlar / Pitfalls
 
@@ -337,6 +414,10 @@ Seed is idempotent — safe to run multiple times.
 - **`useTranslations`** — Hem server hem client component'larda çalışır. `[locale]/layout.tsx` içindeki `NextIntlClientProvider` sayesinde provider zinciri kurulu.
 - **Mongoose duplicate index** — `unique: true` zaten index oluşturur; `schema.index({ email: 1 })` ayrıca yazılmamalı.
 - **next-intl plugin** — `next.config.ts`'de `createNextIntlPlugin` ve `src/i18n/request.ts` birlikte olmak zorunda. Biri eksik olursa "Couldn't find next-intl config file" hatası gelir.
+- **`GameKeyboard`** — Wordle ve Parolla aynı klavyeyi paylaşır (`components/game/GameKeyboard.tsx`). `fixed` prop'u: Wordle `true` (viewport'un altına sabitlenir, kendi spacer'ını ölçer), Parolla `false` (sabit yükseklikli flex kolonun içinde akar).
+- **Parolla cevap alanı gerçek `<input>` değil** — sistem klavyesi açılırsa soru/timer/harfler ekrandan taşıyor. Klavyeyi `readOnly` değil, doğrudan `<Box>` + sahte caret ile çözdük. Fiziksel klavye desteği `window` keydown listener'ında.
+- **`emailVerified` migration** — bu alan eklendikten sonra `npm run seed` bir kez çalıştırılmalı; eski kullanıcı kayıtlarında alan yok ve `undefined` falsy olduğu için giriş yapamazlar.
+- **`SCORE_WEIGHTS`** — günlük/haftalık/aylık toplam skorun tek kaynağı (`config/gameConfig.ts`). Ağırlık değişirse `leaderboard.service.ts` içindeki iki yol da (daily + period aggregation) otomatik uyar.
 
 ---
 
@@ -355,6 +436,7 @@ Seed is idempotent — safe to run multiple times.
 | @chakra-ui/react v3 | Ark UI tabanlı, daha iyi performans ve theming; semantic token sistemi |
 | react-hook-form | Performant, uncontrolled forms; integrates with Zod via @hookform/resolvers |
 | axios | Interceptor support for access token refresh; cleaner than raw fetch for client API calls |
+| nodemailer | Plain SMTP — keeps the mail provider a pure `.env` concern (Resend, Brevo, Zoho, Postfix) instead of coupling the code to one vendor's REST API |
 | zustand | Minimal client state for auth; no boilerplate, works with SSR |
 
 ## VPS Deployment
@@ -443,10 +525,12 @@ Frontend:
 
 ## Known Assumptions
 
-1. Parolla total tiles = `correct + wrong + blank` (dynamic, not hardcoded to 16).
-2. Users cannot self-register; admin creates all accounts.
+1. Parolla is scored over the 26 Turkish letters; 3 wrong answers cancel 1 correct.
+2. Registration is public; a verified email is the only gate (no admin approval).
+   Admins can still create accounts directly, and those are verified up front.
 3. "Weekly" leaderboard = ISO week (Monday–Sunday).
 4. All timestamps stored in UTC. Display timezone = UTC for v1.
 5. DNF in Wordle is represented as `attempt = 7` in the DB.
 6. Avatar is URL-only in v1; file upload deferred.
-7. No email verification flow in v1 (admin-managed accounts).
+7. Password reset ("forgot password") is not implemented — admins reset via
+   `PATCH /api/admin/users/:id/password`.

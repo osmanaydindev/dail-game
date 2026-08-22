@@ -15,6 +15,17 @@ const schema = z.object({
   ADMIN_PASSWORD: z.string().min(8).optional(),
   ADMIN_DISPLAY_NAME: z.string().optional(),
   ADMIN_USERNAME: z.string().min(3).max(20).optional(),
+
+  // ── Outgoing mail (Resend SMTP by default; any SMTP relay works) ──────────
+  // Optional so local development runs without a mail account — when SMTP_HOST
+  // is unset, verification mails are logged to the console instead of sent.
+  SMTP_HOST: z.string().min(1).optional(),
+  SMTP_PORT: z.coerce.number().default(587),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  MAIL_FROM: z.string().default('Aydınlar Oynuyor <noreply@localhost>'),
+  MAIL_REPLY_TO: z.string().email().optional(),
+  EMAIL_VERIFICATION_TTL_MS: z.coerce.number().default(86_400_000), // 24 hours
 });
 
 const parsed = schema.safeParse(process.env);

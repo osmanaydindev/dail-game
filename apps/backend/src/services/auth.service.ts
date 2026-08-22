@@ -1,6 +1,8 @@
 import bcrypt from 'bcryptjs';
+import type mongoose from 'mongoose';
 import { User } from '../models/User';
 import { RefreshToken } from '../models/RefreshToken';
+import { VerificationToken } from '../models/VerificationToken';
 import { signAccessToken } from '../utils/jwt';
 import { generateOpaqueToken, hashToken } from '../utils/crypto';
 import { env } from '../config/env';
@@ -60,4 +62,47 @@ export async function rotateRefreshToken(
 export async function revokeRefreshToken(rawToken: string): Promise<void> {
   const tokenHash = hashToken(rawToken);
   await RefreshToken.findOneAndUpdate({ tokenHash }, { revokedAt: new Date() });
+}
+
+// ─── Email verification ──────────────────────────────────────────────────────
+
+/**
+ * Issues a fresh verification token, invalidating any outstanding ones so an
+ * old link in the user's inbox stops working once they request a new mail.
+ * Returns the raw token — only its sha256 hash is stored.
+ */
+export async function issueVerificationToken(userId: mongoose.Types.ObjectId): Promise<string> {
+  await VerificationToken.updateMany(
+    { userId, usedAt: { $exists: false } },
+    { usedAt: new Date() },
+  );
+
+  const rawToken = generateOpaqueToken();
+  await VerificationToken.create({
+    userId,
+    tokenHash: hashToken(rawToken),
+    expiresAt: new Date(Date.now() + env.EMAIL_VERIFICATION_TTL_MS),
+  });
+  return rawToken;
+}
+
+/** Consumes a verification token. Returns the now-verified user, or null. */
+export async function consumeVerificationToken(rawToken: string): Promise<IUser | null> {
+  const record = await VerificationToken.findOne({
+    tokenHash: hashToken(rawToken),
+    usedAt: { $exists: false },
+  });
+  if (!record || record.expiresAt < new Date()) return null;
+
+  const user = await User.findById(record.userId);
+  if (!user || !user.isActive) return null;
+
+  record.usedAt = new Date();
+  await record.save();
+
+  if (!user.emailVerified) {
+    user.emailVerified = true;
+    await user.save();
+  }
+  return user;
 }

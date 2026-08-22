@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import type { UserSelf } from '@dail-game/types';
+import type { UserSelf, RegisterRequest } from '@dail-game/types';
 import { api, setAccessToken } from '@/lib/api';
 
 interface AuthState {
@@ -11,6 +11,9 @@ interface AuthState {
   isInitialized: boolean;
 
   login(email: string, password: string): Promise<void>;
+  register(input: RegisterRequest): Promise<void>;
+  verifyEmail(token: string): Promise<void>;
+  resendVerification(email: string, locale: 'tr' | 'en'): Promise<void>;
   logout(): Promise<void>;
   refresh(): Promise<boolean>;
   updateUser(updates: Partial<UserSelf>): void;
@@ -36,6 +39,31 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       set({ isLoading: false });
       throw err;
     }
+  },
+
+  // Registration never logs the user in — they must click the emailed link.
+  async register(input: RegisterRequest): Promise<void> {
+    set({ isLoading: true });
+    try {
+      await api.post('/auth/register', input);
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  // The verification link doubles as a login: the server issues tokens on success.
+  async verifyEmail(token: string): Promise<void> {
+    const { data } = await api.post<{ data: { user: UserSelf; accessToken: string } }>(
+      '/auth/verify-email',
+      { token },
+    );
+    const { user, accessToken } = data.data;
+    setAccessToken(accessToken);
+    set({ user, accessToken, isInitialized: true });
+  },
+
+  async resendVerification(email: string, locale: 'tr' | 'en'): Promise<void> {
+    await api.post('/auth/resend-verification', { email, locale });
   },
 
   async logout(): Promise<void> {

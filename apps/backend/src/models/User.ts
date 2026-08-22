@@ -9,6 +9,7 @@ export interface IUser extends Document {
   role: Role;
   avatarUrl?: string;
   isActive: boolean;
+  emailVerified: boolean;
   createdBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -23,7 +24,10 @@ const userSchema = new Schema<IUser>(
     role: { type: String, enum: ['admin', 'user'], default: 'user' },
     avatarUrl: { type: String, default: undefined },
     isActive: { type: Boolean, default: true },
-    createdBy: { type: Schema.Types.ObjectId, ref: 'User', default: undefined },
+    // Self-registered users start unverified and cannot log in until they click
+    // the emailed link. Admin-created and seeded accounts are verified up front.
+    emailVerified: { type: Boolean, default: false },
+    createdBy:{ type: Schema.Types.ObjectId, ref: 'User', default: undefined },
   },
   { timestamps: true },
 );

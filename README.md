@@ -86,17 +86,20 @@ dail-game/
 | Game | Formula | Range |
 |------|---------|-------|
 | Wordle | `(7 - attempt) / 6` | 0.167 – 1.000 (DNF = 0) |
-| Parolla | `correct / (correct + wrong + blank)` | 0.000 – 1.000 |
-| **Combined** | `wordle × 0.5 + parolla × 0.5` | 0.000 – 1.000 |
+| Parolla | `max(0, correct - wrong / 3) / 26` | 0.000 – 1.000 |
+| **Combined** | `wordle × 0.4 + parolla × 0.6` | 0.000 – 1.000 |
 
 Higher score = better ranking. Ties broken by earliest submission.
 
 ## API Summary
 
 ```
-POST   /api/auth/login          Login
-POST   /api/auth/refresh        Refresh access token (uses httpOnly cookie)
-POST   /api/auth/logout         Logout
+POST   /api/auth/register             Self-registration (sends verification email)
+POST   /api/auth/verify-email         Verify email via token, logs the user in
+POST   /api/auth/resend-verification  Resend the verification email
+POST   /api/auth/login                Login (403 EMAIL_NOT_VERIFIED if unverified)
+POST   /api/auth/refresh              Refresh access token (uses httpOnly cookie)
+POST   /api/auth/logout               Logout
 
 GET    /api/users/me            Get own profile
 PATCH  /api/users/me            Update display name / avatar URL
@@ -139,7 +142,12 @@ No core schema changes required.
 
 - Passwords hashed with bcrypt (rounds=12)
 - Refresh tokens stored as SHA-256 hashes, rotated on every use
-- Rate limiting: 10 auth attempts per 15 minutes per IP
+- Verification tokens stored as SHA-256 hashes, single-use, 24h TTL index
+- Rate limiting: 30 auth attempts / 15 min per IP; 5 registration or resend
+  requests / hour per IP (each of those can send an email)
+- Registration never reveals whether an email is already in use; usernames are
+  public, so username collisions do return 409
+- Self-registration cannot set `role` — it is always `user`
 - All business rules enforced server-side
 - DB unique index prevents duplicate daily entries
 

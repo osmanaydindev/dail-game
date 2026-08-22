@@ -33,6 +33,7 @@ export async function createUser(req: Request, res: Response): Promise<void> {
       displayName,
       passwordHash,
       role,
+      emailVerified: true, // the admin vouches for the address
       createdBy: req.user!.id,
     });
 

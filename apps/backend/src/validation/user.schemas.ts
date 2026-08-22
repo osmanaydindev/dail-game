@@ -1,15 +1,19 @@
 import { z } from 'zod';
 
 const HTTPS_URL = z.string().url().regex(/^https:\/\//, 'Avatar URL must be HTTPS');
-const USERNAME = z
+
+/** Shared by admin user creation and public self-registration. */
+export const USERNAME = z
   .string()
   .min(3, 'Username must be at least 3 characters')
   .max(20, 'Username must be at most 20 characters')
   .regex(/^[a-zA-Z0-9_]+$/, 'Username can only contain letters, numbers, and underscores');
 
+export const PASSWORD = z.string().min(8, 'Password must be at least 8 characters').max(128);
+
 export const createUserSchema = z.object({
   email: z.string().email(),
-  password: z.string().min(8).max(128),
+  password: PASSWORD,
   username: USERNAME,
   displayName: z.string().min(1).max(50).trim(),
   role: z.enum(['admin', 'user']).default('user'),

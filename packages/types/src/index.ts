@@ -26,6 +26,7 @@ export interface UserPublic {
 
 export interface UserSelf extends UserPublic {
   email: string;
+  emailVerified?: boolean;
 }
 
 // ─── Game ─────────────────────────────────────────────────────────────────────
@@ -110,6 +111,17 @@ export interface AuthResponse {
   user: UserSelf;
   accessToken: string;
 }
+
+export interface RegisterRequest {
+  email: string;
+  password: string;
+  username: string;
+  displayName: string;
+  locale?: 'tr' | 'en';
+}
+
+/** `error` value returned by POST /auth/login when the account is unverified. */
+export const EMAIL_NOT_VERIFIED = 'EMAIL_NOT_VERIFIED';
 
 // ─── Admin ────────────────────────────────────────────────────────────────────
 
