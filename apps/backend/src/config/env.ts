@@ -29,6 +29,10 @@ const schema = z.object({
   // Much shorter than email verification: a reset link is a live key to the
   // account, so its window of usefulness if intercepted must be small.
   PASSWORD_RESET_TTL_MS: z.coerce.number().default(3_600_000), // 1 hour
+
+  // Backs rate limiting. Optional: without it, limits fall back to per-process
+  // memory, which resets on restart and does not add up across replicas.
+  REDIS_URL: z.string().url().optional(),
 });
 
 const parsed = schema.safeParse(process.env);

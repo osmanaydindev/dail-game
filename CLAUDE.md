@@ -13,6 +13,7 @@ It shows daily, weekly, and monthly leaderboards with normalized combined scorin
 | UI         | Chakra UI v3                                  |
 | Backend    | Node.js 22 + Express 4                        |
 | Database   | MongoDB 7 + Mongoose 8                        |
+| Rate limit | Redis 7 (express-rate-limit + rate-limit-redis)|
 | Auth       | JWT (access) + httpOnly cookie (refresh)      |
 | i18n       | next-intl v4 — `[locale]` App Router routing  |
 | Color mode | next-themes (Chakra UI v3 uyumu için)         |
@@ -261,6 +262,46 @@ POST /auth/reset-password   →  new password + EVERY refresh token revoked
 - Per-account 60s cooldown in `issuePasswordResetToken` on top of the per-IP
   limit, so an attacker rotating IPs still cannot flood one victim's inbox.
 
+### Rate Limiting (Redis)
+
+Counters live in Redis (`REDIS_URL`), so they survive a container restart and
+add up across replicas. Docker Compose runs a `redis:7-alpine` service on the
+internal network with no external port and no persistence — the data is
+disposable, so `--save "" --appendonly no` plus an LRU cap is the whole config.
+
+| Limiter | Window | Max | Key prefix | Applies to |
+|---------|--------|-----|-----------|------------|
+| `apiLimiter` | 1 min | 120 | `rl:api:` | all of `/api` |
+| `authLimiter` | 15 min | 30 | `rl:auth:` | login, refresh, verify-email, reset-password |
+| `registerLimiter` | 1 hour | 5 | `rl:register:` | register, resend-verification |
+| `passwordResetLimiter` | 1 hour | 5 | `rl:reset:` | forgot-password |
+
+Each limiter gets its own prefix. Sharing one would merge unrelated counters —
+that is how signup attempts previously ate the password-reset budget.
+
+**Three failure modes had to be handled explicitly, and each one bit during
+implementation:**
+
+1. `RedisStore` loads a Lua script *in its constructor*. `server.ts` therefore
+   awaits `waitForRedisReady()` and only then `await import('./app')`, because
+   the limiters build their store at module load. Getting this wrong crashed the
+   process on boot.
+2. node-redis **queues commands while disconnected** by default, so a limiter
+   lookup during an outage never settles and the HTTP request hangs forever —
+   the exact opposite of failing open. `disableOfflineQueue: true` plus an
+   `isRedisReady()` guard makes those commands reject immediately instead.
+3. A connection that is up but stalled would still hang, so `sendCommand` is
+   wrapped in a 1s `Promise.race` timeout.
+
+All limiters use `passOnStoreError: true`: losing rate limiting during a Redis
+outage is bad, refusing every request because the limiter cannot count is worse.
+`authBackstopLimiter` in `app.ts` is deliberately **memory**-backed and set well
+above the Redis limits (200/15min), so brute-force protection on `/api/auth`
+never disappears entirely while Redis is down.
+
+Verified: counter survives a backend restart (429 before and after); requests
+during a full Redis outage return in ~0.29s instead of hanging.
+
 ### Anti-Enumeration & Timing
 
 Every endpoint that takes an email address returns an identical body whether or
@@ -491,6 +532,7 @@ Seed is idempotent — safe to run multiple times.
 | react-hook-form | Performant, uncontrolled forms; integrates with Zod via @hookform/resolvers |
 | axios | Interceptor support for access token refresh; cleaner than raw fetch for client API calls |
 | nodemailer | Plain SMTP — keeps the mail provider a pure `.env` concern (Resend, Brevo, Zoho, Postfix) instead of coupling the code to one vendor's REST API |
+| redis + rate-limit-redis | Shared rate-limit counters that survive restarts and add up across replicas. Pinned to `rate-limit-redis@4` because v6 requires express-rate-limit v8, whose `max` → `limit` rename would touch every limiter |
 | zustand | Minimal client state for auth; no boilerplate, works with SSR |
 
 ## VPS Deployment
@@ -588,6 +630,5 @@ Frontend:
 6. Avatar is URL-only in v1; file upload deferred.
 7. Password reset is self-service via emailed link; admins can still force a
    reset with `PATCH /api/admin/users/:id/password`.
-8. Rate limiting is in-process memory. It resets when the container restarts and
-   counts per-instance, so scaling past one backend replica needs a shared store
-   (Redis) before the limits mean anything.
+8. Rate limiting is Redis-backed (see below). Counters survive restarts and add
+   up across replicas.

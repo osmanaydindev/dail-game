@@ -7,6 +7,7 @@ Daily Wordle and Parolla leaderboard app. Users submit their daily game results 
 - **Frontend**: Next.js 15 (App Router) + Chakra UI v3
 - **Backend**: Node.js + Express 4 + Mongoose 8
 - **Database**: MongoDB 7
+- **Rate limiting**: Redis 7 (optional — falls back to process memory)
 - **Auth**: JWT access tokens + httpOnly refresh cookies
 - **i18n**: next-intl (English base, extensible)
 
@@ -149,8 +150,10 @@ No core schema changes required.
   successful reset revokes every refresh token on the account
 - Endpoints taking an email address are constant-response *and* constant-time
   (see "Anti-Enumeration & Timing" in CLAUDE.md)
-- Rate limiting: 30 auth attempts / 15 min per IP; 5 registration or resend
-  requests / hour per IP (each of those can send an email)
+- Rate limiting is Redis-backed, so counters survive restarts and add up across
+  replicas: 120 req/min on `/api`, 30 auth attempts / 15 min, and 5 per hour each
+  for registration and for password reset (separate budgets — a signup burst must
+  not lock you out of recovery). Falls back to process memory without `REDIS_URL`.
 - Registration never reveals whether an email is already in use; usernames are
   public, so username collisions do return 409
 - Self-registration cannot set `role` — it is always `user`

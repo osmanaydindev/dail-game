@@ -12,6 +12,14 @@ services:
     environment:
       MONGO_INITDB_DATABASE: dail-game
 
+  redis:
+    image: redis:7-alpine
+    container_name: dail-game-redis
+    restart: unless-stopped
+    command: redis-server --save "" --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru
+    ports:
+      - '6380:6379'
+
   backend:
     build:
       context: .
@@ -20,10 +28,12 @@ services:
     restart: unless-stopped
     depends_on:
       - mongodb
+      - redis
     env_file:
       - ./apps/backend/.env
     environment:
       MONGODB_URI: mongodb://mongodb:27017/dail-game
+      REDIS_URL: redis://redis:6379
     ports:
       - '5002:5000'
 

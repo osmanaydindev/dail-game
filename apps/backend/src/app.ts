@@ -4,7 +4,7 @@ import cors from 'cors';
 import cookieParser from 'cookie-parser';
 import path from 'path';
 import { env } from './config/env';
-import { apiLimiter } from './middleware/rateLimiter';
+import { apiLimiter, authBackstopLimiter } from './middleware/rateLimiter';
 import { errorHandler } from './middleware/errorHandler';
 import { requireAuth } from './middleware/auth';
 import { requireAdmin } from './middleware/admin';
@@ -39,6 +39,9 @@ app.use(cookieParser());
 
 // ─── Rate limiting ────────────────────────────────────────────────────────────
 app.use('/api', apiLimiter);
+// In-process backstop: the Redis-backed limiters fail open, so this is what
+// still bounds brute force on auth endpoints while Redis is unavailable.
+app.use('/api/auth', authBackstopLimiter);
 
 // ─── Routes ───────────────────────────────────────────────────────────────────
 app.use('/api/auth', authRoutes);

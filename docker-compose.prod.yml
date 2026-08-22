@@ -13,6 +13,22 @@ services:
     environment:
       MONGO_INITDB_DATABASE: dail-game
 
+  redis:
+    image: redis:7-alpine
+    container_name: dail-game-redis
+    restart: unless-stopped
+    # Rate limit counters are disposable — no persistence, and evict the oldest
+    # keys rather than start refusing writes if the cap is somehow reached.
+    command: redis-server --save "" --appendonly no --maxmemory 64mb --maxmemory-policy allkeys-lru
+    # No external port: reachable only from the internal Docker network.
+    networks:
+      - internal
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   backend:
     build:
       context: .
@@ -21,11 +37,13 @@ services:
     restart: unless-stopped
     depends_on:
       - mongodb
+      - redis
     env_file:
       - ./apps/backend/.env
     environment:
       NODE_ENV: production
       MONGODB_URI: mongodb://mongodb:27017/dail-game
+      REDIS_URL: redis://redis:6379
     ports:
       - '127.0.0.1:5002:5000'
     volumes:
