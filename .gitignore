@@ -58,5 +58,8 @@ coverage/
 # Docker
 docker-compose.override.yml
 
+# Sunucu erişim notları — IP, SSH portu ve kullanıcı adı içeriyor
+DEPLOY.md
+
 # Default profraw (clang coverage)
 *.profraw
