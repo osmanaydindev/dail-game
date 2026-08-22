@@ -32,8 +32,6 @@ export function Navbar() {
     { href: '/leaderboard' as const, label: t('leaderboard') },
     { href: '/wordle' as const, label: t('wordle') },
     { href: '/parolla' as const, label: t('parolla') },
-    { href: '/tavla' as const, label: 'Tavla' },
-    { href: '/kizma-birader' as const, label: 'Kızma Birader' },
     { href: '/history' as const, label: t('history') },
     { href: '/games' as const, label: t('games') },
   ];
@@ -195,11 +193,14 @@ export function Navbar() {
                 )}
               </Box>
             ) : (
-              <Box display={{ base: 'none', md: 'block' }}>
+              <HStack gap={2} display={{ base: 'none', md: 'flex' }}>
                 <Link href="/login">
-                  <Button size="sm" colorPalette="brand" variant="solid">{t('login')}</Button>
+                  <Button size="sm" variant="ghost">{t('login')}</Button>
                 </Link>
-              </Box>
+                <Link href="/register">
+                  <Button size="sm" colorPalette="brand" variant="solid">{t('register')}</Button>
+                </Link>
+              </HStack>
             )}
 
             {/* Mobile hamburger */}
@@ -286,8 +287,13 @@ export function Navbar() {
                 ) : (
                   <>
                     <Box h="1px" bg="border.subtle" my={2} />
-                    <Link href="/login" onClick={() => setMobileOpen(false)}>
+                    <Link href="/register" onClick={() => setMobileOpen(false)}>
                       <Button colorPalette="brand" variant="solid" w="full">
+                        {t('register')}
+                      </Button>
+                    </Link>
+                    <Link href="/login" onClick={() => setMobileOpen(false)}>
+                      <Button variant="outline" w="full">
                         {t('login')}
                       </Button>
                     </Link>
