@@ -8,12 +8,12 @@ import { api } from '@/lib/api';
 import { todayLocal } from '@/lib/date';
 import { getDailyWord, VALID_LETTERS, loadValidWords, isValidGuess } from '@/lib/wordleWords';
 import { useAuthStore } from '@/store/authStore';
+import { GameKeyboard, type KeyStatus } from '@/components/game/GameKeyboard';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type TileStatus = 'empty' | 'tbd' | 'correct' | 'present' | 'absent';
-type KeyStatus  = 'correct' | 'present' | 'absent' | 'unused';
 type GameStatus = 'playing' | 'won' | 'lost';
 
 interface SavedState {
@@ -27,13 +27,6 @@ interface SavedState {
 const MAX_GUESSES = 6;
 const WORD_LENGTH  = 5;
 const wordleStorageKey = (userId: string) => `wordle-state-${userId}`;
-
-// Türkçe Q klavye düzeni — ı (I) 1. satırda U'dan sonra, i (İ) 2. satırda Ş'den sonra.
-const KEYBOARD_ROWS = [
-  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P', 'Ğ', 'Ü'],
-  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L', 'Ş', 'İ'],
-  ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'Ö', 'Ç', '⌫'],
-];
 
 // ─── Game logic ───────────────────────────────────────────────────────────────
 function evaluateGuess(guess: string, target: string): TileStatus[] {
@@ -115,60 +108,6 @@ function Tile({ letter, status }: { letter: string; status: TileStatus }) {
       transition="background 0.15s, border-color 0.15s"
     >
       {letter}
-    </Box>
-  );
-}
-
-const KEY_BG: Record<KeyStatus, string> = {
-  correct: '#538d4e',
-  present: '#b59f3b',
-  absent:  '#3a3a3c',
-  unused:  '',
-};
-
-function KeyboardKey({
-  label,
-  keyStatus,
-  onPress,
-}: {
-  label: string;
-  keyStatus: KeyStatus;
-  onPress: () => void;
-}) {
-  const isAction = label === 'ENTER' || label === '⌫';
-  const colored  = keyStatus !== 'unused';
-
-  return (
-    <Box
-      as="button"
-      onClick={onPress}
-      display="flex"
-      alignItems="center"
-      justifyContent="center"
-      h={{ base: '50px', md: '64px' }}
-      minW={isAction
-        ? { base: '40px', md: '58px' }
-        : { base: '26px', md: '36px' }
-      }
-      px={isAction ? { base: 0.5, md: 1 } : 0}
-      fontSize={isAction
-        ? { base: '9px', md: '11px' }
-        : { base: '13px', md: 'md' }
-      }
-      fontWeight="700"
-      borderRadius="6px"
-      bg={colored ? KEY_BG[keyStatus] : 'surface.card'}
-      color={colored ? 'white' : undefined}
-      border="1px solid"
-      borderColor="border.subtle"
-      cursor="pointer"
-      userSelect="none"
-      _hover={{ opacity: 0.8 }}
-      _active={{ opacity: 0.6 }}
-      transition="opacity 0.1s"
-      style={{ WebkitTapHighlightColor: 'transparent' }}
-    >
-      {label}
     </Box>
   );
 }
@@ -451,42 +390,14 @@ export function WordleGame() {
         </Box>
       )}
 
-      {/* Sabit klavye için boşluk — kareler klavyenin altında kalmasın */}
-      <Box h={{ base: '200px', md: '250px' }} flexShrink={0} aria-hidden="true" />
-
-      {/* Keyboard — ekranın altına sabit */}
-      <Box
-        position="fixed"
-        bottom={0}
-        left={0}
-        right={0}
-        zIndex={1000}
-        bg="surface"
-        borderTopWidth="1px"
-        borderColor="border.subtle"
-        pt={2}
-        pb={{ base: 3, md: 4 }}
-        px={2}
-      >
-        <VStack gap={1.5} w="full" maxW="500px" mx="auto">
-          {KEYBOARD_ROWS.map((row, ri) => (
-            <HStack key={ri} gap={{ base: 0.5, md: 1 }} justify="center" flexWrap="nowrap">
-              {row.map((key) => (
-                <KeyboardKey
-                  key={key}
-                  label={key}
-                  keyStatus={key === 'ENTER' || key === '⌫' ? 'unused' : (keyStatuses[key] ?? 'unused')}
-                  onPress={() => {
-                    if (key === 'ENTER') submitGuess();
-                    else if (key === '⌫') deleteLetter();
-                    else addLetter(key);
-                  }}
-                />
-              ))}
-            </HStack>
-          ))}
-        </VStack>
-      </Box>
+      {/* Keyboard — ekranın altına sabit, üstüne kendi boşluğunu bırakır */}
+      <GameKeyboard
+        actionLabel="ENTER"
+        onAction={submitGuess}
+        onKey={addLetter}
+        onDelete={deleteLetter}
+        keyStatuses={keyStatuses}
+      />
 
     </VStack>
   );

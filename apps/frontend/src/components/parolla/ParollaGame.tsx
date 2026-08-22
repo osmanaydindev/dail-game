@@ -1,11 +1,12 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { Box, VStack, HStack, Text, Input, Spinner, Alert } from '@chakra-ui/react';
+import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
+import { Box, VStack, HStack, Text, Spinner, Alert } from '@chakra-ui/react';
 import { api } from '@/lib/api';
 import { todayLocal } from '@/lib/date';
 import { getDailyQuestions, checkAnswer } from '@/lib/parollaData';
 import { useAuthStore } from '@/store/authStore';
+import { GameKeyboard } from '@/components/game/GameKeyboard';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
 
@@ -446,10 +447,33 @@ export function ParollaGame() {
   const [loadError,   setLoadError]   = useState<string | null>(null);
   const [inputError,  setInputError]  = useState<string | null>(null);
 
-  const inputRef        = useRef<HTMLInputElement>(null);
+  const rootRef         = useRef<HTMLDivElement>(null);
   const bubblesRef      = useRef<HTMLDivElement>(null);
   const bubbleRefsArr   = useRef<(HTMLDivElement | null)[]>([]);
   const revisitModeRef  = useRef(false);
+
+  // Available height below whatever the page renders above us. The on-screen
+  // keyboard means the system keyboard never opens, so the viewport is stable
+  // and everything (letters, timer, question, answer, keyboard) fits at once.
+  const [availableHeight, setAvailableHeight] = useState<number | null>(null);
+
+  useLayoutEffect(() => {
+    if (gameStatus !== 'playing') { setAvailableHeight(null); return; }
+    const update = () => {
+      const el = rootRef.current;
+      if (!el) return;
+      const top = el.getBoundingClientRect().top + window.scrollY;
+      // -40px covers AppShell's bottom padding so the page itself never scrolls.
+      setAvailableHeight(Math.max(320, window.innerHeight - top - 40));
+    };
+    update();
+    window.addEventListener('resize', update);
+    window.addEventListener('orientationchange', update);
+    return () => {
+      window.removeEventListener('resize', update);
+      window.removeEventListener('orientationchange', update);
+    };
+  }, [gameStatus]);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
@@ -510,11 +534,6 @@ export function ParollaGame() {
     }
   }, [timeLeft, gameStatus]);
 
-  // ── Focus input ───────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (gameStatus === 'playing') inputRef.current?.focus();
-  }, [gameStatus, currentIdx]);
-
   // ── Aktif harfi container'da ortala ──────────────────────────────────────
   useEffect(() => {
     const container = bubblesRef.current;
@@ -570,7 +589,6 @@ export function ParollaGame() {
   // ── Start (ready → playing) ───────────────────────────────────────────────
   const handleStart = useCallback(() => {
     setGameStatus('playing');
-    setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
   // ── Submit answer ─────────────────────────────────────────────────────────
@@ -607,10 +625,43 @@ export function ParollaGame() {
   }, [gameStatus, results, currentIdx, advance]);
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
-  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
-    else if (e.key === 'Tab') { e.preventDefault(); handleSkip(); }
-  }, [handleSubmit, handleSkip]);
+  const appendChar = useCallback((char: string) => {
+    if (gameStatus !== 'playing') return;
+    setInputError(null);
+    setUserInput(v => v + char);
+  }, [gameStatus]);
+
+  // On-screen keys arrive upper-case; store them the way the player would type.
+  const pressLetter = useCallback((letter: string) => {
+    appendChar(letter.toLocaleLowerCase('tr-TR'));
+  }, [appendChar]);
+
+  const pressSpace = useCallback(() => {
+    // Parolla answers can be multi-word, but never start with a space.
+    setUserInput(v => (v.length === 0 || v.endsWith(' ') ? v : v + ' '));
+  }, []);
+
+  const pressDelete = useCallback(() => {
+    if (gameStatus !== 'playing') return;
+    setInputError(null);
+    setUserInput(v => v.slice(0, -1));
+  }, [gameStatus]);
+
+  // Physical keyboard (desktop). The answer field is not a real input any more,
+  // so this listener lives on window like Wordle's.
+  useEffect(() => {
+    if (gameStatus !== 'playing') return;
+    const handle = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (e.key === 'Enter')     { e.preventDefault(); handleSubmit(); return; }
+      if (e.key === 'Tab')       { e.preventDefault(); handleSkip(); return; }
+      if (e.key === 'Backspace') { e.preventDefault(); pressDelete(); return; }
+      if (e.key === ' ')         { e.preventDefault(); pressSpace(); return; }
+      if (e.key.length === 1)    { e.preventDefault(); appendChar(e.key); }
+    };
+    window.addEventListener('keydown', handle);
+    return () => window.removeEventListener('keydown', handle);
+  }, [gameStatus, handleSubmit, handleSkip, pressDelete, pressSpace, appendChar]);
 
   // ─────────────────────────────────────────────────────────────────────────
   if (loadError) {
@@ -634,7 +685,16 @@ export function ParollaGame() {
   const current = results[currentIdx];
 
   return (
-    <Box w="full" position="relative" minH="60vh" display="flex" flexDir="column">
+    <Box
+      ref={rootRef}
+      w="full"
+      position="relative"
+      display="flex"
+      flexDir="column"
+      h={availableHeight ? `${availableHeight}px` : undefined}
+      minH={availableHeight ? undefined : '60vh'}
+      overflow={availableHeight ? 'hidden' : undefined}
+    >
 
       {gameStatus === 'ready' && <ReadyModal onStart={handleStart} />}
 
@@ -647,7 +707,7 @@ export function ParollaGame() {
       )}
 
       {/* Letter bubbles */}
-      <Box ref={bubblesRef} overflowX="auto" w="full" pb={2}
+      <Box ref={bubblesRef} overflowX="auto" w="full" pb={2} flexShrink={0}
         css={{ '&::-webkit-scrollbar': { display: 'none' }, scrollbarWidth: 'none' }}
       >
         <HStack gap={{ base: 2, md: 3 }} px={4} minW="max-content">
@@ -658,8 +718,8 @@ export function ParollaGame() {
               <Box
                 key={r.letter}
                 ref={(el: HTMLDivElement | null) => { bubbleRefsArr.current[i] = el; }}
-                w={{ base: '48px', md: '56px' }}
-                h={{ base: '48px', md: '56px' }}
+                w={{ base: '44px', md: '56px' }}
+                h={{ base: '44px', md: '56px' }}
                 borderRadius="full"
                 display="flex"
                 alignItems="center"
@@ -681,16 +741,33 @@ export function ParollaGame() {
       </Box>
 
       {/* Timer */}
-      <HStack justify="center" gap={2} mt={5} color={timeLeft <= 30 ? 'red.400' : 'text.muted'}>
-        <Text fontSize="lg">⏱</Text>
-        <Text fontFamily="mono" fontSize="2xl" fontWeight="700">{fmtTime(timeLeft)}</Text>
+      <HStack
+        justify="center"
+        gap={2}
+        mt={{ base: 3, md: 5 }}
+        flexShrink={0}
+        color={timeLeft <= 30 ? 'red.400' : 'text.muted'}
+      >
+        <Text fontSize="md">⏱</Text>
+        <Text fontFamily="mono" fontSize={{ base: 'xl', md: '2xl' }} fontWeight="700">
+          {fmtTime(timeLeft)}
+        </Text>
       </HStack>
 
-      {/* Question */}
-      <Box flex={1} display="flex" alignItems="center" justifyContent="center" px={6} py={8}>
+      {/* Question — absorbs whatever vertical space is left over */}
+      <Box
+        flex={1}
+        minH={0}
+        display="flex"
+        alignItems="center"
+        justifyContent="center"
+        px={{ base: 4, md: 6 }}
+        py={{ base: 3, md: 8 }}
+        overflowY="auto"
+      >
         {gameStatus === 'playing' && current && (
           <Text
-            fontSize={{ base: 'xl', md: '2xl' }}
+            fontSize={{ base: 'lg', md: '2xl' }}
             fontWeight="800"
             textAlign="center"
             letterSpacing="wider"
@@ -709,26 +786,10 @@ export function ParollaGame() {
         />
       )}
 
-      {/* Input + PAS */}
+      {/* Answer field + on-screen keyboard */}
       {gameStatus === 'playing' && (
-        <Box px={4} pb={4} w="full" maxW="600px" mx="auto">
-          {/* Letter indicator — stays visible above keyboard on mobile */}
-          {current && (
-            <HStack justify="center" mb={3} gap={3}>
-              <Box
-                w="44px" h="44px"
-                borderRadius="full"
-                display="flex" alignItems="center" justifyContent="center"
-                fontWeight="900" fontSize="xl"
-                bg="surface.card"
-                borderWidth="3px" borderColor="white"
-                boxShadow="0 2px 12px rgba(0,0,0,0.4)"
-                flexShrink={0}
-              >
-                {current.letter}
-              </Box>
-            </HStack>
-          )}
+        <>
+        <Box px={{ base: 3, md: 4 }} pb={2} w="full" maxW="600px" mx="auto" flexShrink={0}>
           {inputError && (
             <Box
               mb={2}
@@ -749,28 +810,62 @@ export function ParollaGame() {
             borderWidth="1px"
             borderColor="border.emphasized"
           >
-            <Input
-              ref={inputRef}
-              value={userInput}
-              onChange={e => { setUserInput(e.target.value); if (inputError) setInputError(null); }}
-              onKeyDown={handleKeyDown}
-              placeholder="Cevabı Yaz"
-              border="none"
-              borderRadius="0"
-              _focus={{ boxShadow: 'none' }}
-              fontSize="md"
+            {/* Current letter — the answer must start with it */}
+            {current && (
+              <Box
+                h="56px"
+                minW="52px"
+                display="flex"
+                alignItems="center"
+                justifyContent="center"
+                fontWeight="900"
+                fontSize="xl"
+                bg="surface.subtle"
+                borderRightWidth="1px"
+                borderColor="border.emphasized"
+                flexShrink={0}
+              >
+                {current.letter}
+              </Box>
+            )}
+
+            {/* Not a real <input> — the on-screen keyboard is the only text
+                source, so the mobile system keyboard never covers the screen. */}
+            <Box
+              flex={1}
               h="56px"
-              px={5}
-              autoComplete="off"
-              autoCorrect="off"
-              autoCapitalize="off"
-              spellCheck={false}
-            />
+              px={4}
+              minW={0}
+              display="flex"
+              alignItems="center"
+              overflow="hidden"
+            >
+              <Text
+                fontSize="md"
+                color={userInput ? undefined : 'text.muted'}
+                whiteSpace="pre"
+                overflow="hidden"
+                minW={0}
+                css={{ direction: 'rtl', textAlign: 'left' }}
+              >
+                {userInput || 'Cevabı Yaz'}
+              </Text>
+              <Box
+                as="span"
+                w="2px"
+                h="24px"
+                ml="2px"
+                bg="brand.500"
+                flexShrink={0}
+                css={{ animation: 'ao-caret-blink 1.1s step-end infinite' }}
+              />
+            </Box>
+
             <Box
               as="button"
               onClick={userInput.trim() ? handleSubmit : handleSkip}
               h="56px"
-              px={5}
+              px={4}
               bg={userInput.trim() ? '#538d4e' : '#c9a227'}
               color="white"
               fontWeight="700"
@@ -790,6 +885,18 @@ export function ParollaGame() {
             </Box>
           </HStack>
         </Box>
+
+        <GameKeyboard
+          fixed={false}
+          actionLabel={userInput.trim() ? 'GÖNDER' : 'PAS'}
+          actionColor={userInput.trim() ? '#538d4e' : '#c9a227'}
+          onAction={userInput.trim() ? handleSubmit : handleSkip}
+          onKey={pressLetter}
+          onDelete={pressDelete}
+          showSpace
+          onSpace={pressSpace}
+        />
+        </>
       )}
     </Box>
   );

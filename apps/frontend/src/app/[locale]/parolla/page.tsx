@@ -240,9 +240,11 @@ export default function ParollaPage() {
   }
 
   return (
-    <AppShell>
-      <Box maxW="600px" mx="auto">
-        <Box textAlign="center" mb={6}>
+    // noPadding + mobilde başlık gizli: oyun ekranı harf balonları, süre, soru,
+    // cevap alanı ve klavyeyi aynı anda gösterecek dikey alana ihtiyaç duyuyor.
+    <AppShell noPadding>
+      <Box maxW="600px" mx="auto" px={{ base: 0, md: 6 }}>
+        <Box textAlign="center" mb={4} display={{ base: 'none', md: 'block' }}>
           <Heading size="xl" fontWeight="800" mb={1}>Parolla</Heading>
           <Text fontSize="sm" color="text.muted">
             26 harf · 5 dakika · günde bir kez
