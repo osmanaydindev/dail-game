@@ -786,15 +786,21 @@ export function ParollaGame() {
         </Text>
       </HStack>
 
-      {/* Question — absorbs whatever vertical space is left over */}
+      {/* Question — takes its natural height so the whole block stays packed at
+          the top instead of being spread down a tall desktop viewport. Capped
+          and scrollable so an unusually long question can't push the answer
+          field off screen. */}
       <Box
-        flex={1}
-        minH={0}
+        flexShrink={0}
+        // Derived from the measured height rather than a dvh fraction: `dvh`
+        // ignores the phone's keyboard, so a long question could still push the
+        // answer field behind it. 200px is what the rest of the column needs.
+        maxH={availableHeight ? `${Math.max(110, availableHeight - 200)}px` : '280px'}
         display="flex"
         alignItems="center"
         justifyContent="center"
         px={{ base: 4, md: 6 }}
-        py={{ base: 3, md: 8 }}
+        py={{ base: 4, md: 6 }}
         overflowY="auto"
       >
         {gameStatus === 'playing' && current && (
