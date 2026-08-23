@@ -110,7 +110,7 @@ export default function LeaderboardPage() {
             {dailyData.parolla.length === 0 && <EmptyState title={t('noParolla')} />}
           </GridItem>
           <GridItem minW={0}>
-            <LeaderboardTable title={t('overall')} entries={dailyData.total} scoreLabel={t('totalScore')} />
+            <LeaderboardTable title={t('overall')} entries={dailyData.total} />
             {dailyData.total.length === 0 && <EmptyState title={t('noCombined')} />}
           </GridItem>
         </Grid>
@@ -121,7 +121,7 @@ export default function LeaderboardPage() {
           <LeaderboardTable
             title={period === 'weekly' ? t('weekly') : `${t('monthly')} — ${monthParam}`}
             entries={periodData}
-            scoreLabel={t('totalScore')}
+           
           />
           {periodData.length === 0 && (
             <EmptyState title={t('empty')} description={t('beFirst')} />

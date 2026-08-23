@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { AppShell } from '@/components/layout/AppShell';
 import { DailyLeaderboardWidget } from '@/components/leaderboard/DailyLeaderboardWidget';
+import { formatScore } from '@/components/leaderboard/LeaderboardTable';
 import { Box, Text, VStack, HStack, Stack, Button, Grid, SimpleGrid } from '@chakra-ui/react';
 import { Link } from '@/lib/navigation';
 import { api } from '@/lib/api';
@@ -269,10 +270,10 @@ export default function HomePage() {
                 {t('combined')}
               </Text>
               <Text fontSize="2xl" fontWeight="800" fontFamily="mono" lineHeight="1.2">
-                {(
+                {formatScore(
                   (wordle?.normalizedScore ?? 0) * SCORE_WEIGHTS.wordle +
-                  (parolla?.normalizedScore ?? 0) * SCORE_WEIGHTS.parolla
-                ).toFixed(3)}
+                  (parolla?.normalizedScore ?? 0) * SCORE_WEIGHTS.parolla,
+                )}
               </Text>
               <Text fontSize="xs" color="text.muted" mt={0.5}>
                 {t('weightedTotal')}

@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import {
-  Table, Avatar, Badge, HStack, Text, Box,
+  Avatar, HStack, Text, Box,
   Dialog, VStack, Separator, Button,
 } from '@chakra-ui/react';
 import { useTranslations } from 'next-intl';
@@ -22,27 +22,15 @@ function formatRawScore(entry: LeaderboardEntry, dnfLabel: string): string | nul
   }
   if (entry.gameSlug === 'parolla') {
     const s = entry.rawScores as ParollaScores;
-    return `${s.correct}✓  ${s.wrong}✗  ${s.blank}○`;
+    // Symbols rather than bare numbers — "24·1·1" gives no clue which is which.
+    return `${s.correct}✓ ${s.wrong}✗ ${s.blank}○`;
   }
   return null;
 }
 
-function ScoreBar({ score }: { score: number }) {
-  return (
-    <HStack gap={2} justify="flex-end" flexShrink={0}>
-      <Box h="6px" w="44px" bg="border.subtle" borderRadius="full" overflow="hidden" display={{ base: 'none', md: 'block' }}>
-        <Box
-          h="full"
-          bg="brand.500"
-          borderRadius="full"
-          style={{ width: `${score * 100}%`, transition: 'width 0.5s ease' }}
-        />
-      </Box>
-      <Text fontSize="sm" fontWeight="600" fontFamily="mono" minW="36px" textAlign="right">
-        {(score * 100).toFixed(1)}
-      </Text>
-    </HStack>
-  );
+/** Shared 0–100 presentation so every surface shows the same number the same way. */
+export function formatScore(normalized: number): string {
+  return (normalized * 100).toFixed(1);
 }
 
 // ─── Player detail modal ───────────────────────────────────────────────────────
@@ -90,7 +78,7 @@ function PlayerModal({
               <HStack justify="space-between">
                 <Text fontSize="sm" color="text.muted">{scoreLabel}</Text>
                 <Text fontWeight="700" fontFamily="mono">
-                  {(entry.normalizedScore * 100).toFixed(2)}
+                  {formatScore(entry.normalizedScore)}
                 </Text>
               </HStack>
               {rawDisplay && (
@@ -122,68 +110,106 @@ export function LeaderboardTable({ entries, title, scoreLabel }: LeaderboardTabl
 
   const [selected, setSelected] = useState<LeaderboardEntry | null>(null);
 
+  // The overall board carries no per-game result, so the column is dropped
+  // instead of printing a dash on every row.
+  const hasRawScores = entries.some((e) => formatRawScore(e, '') !== null);
+
   return (
     <>
       <Box bg="surface.card" borderRadius="xl" borderWidth="1px" borderColor="border.subtle" overflow="hidden" minW={0}>
-        <Box px={4} py={3} borderBottomWidth="1px" borderColor="border.subtle">
+        <HStack
+          justify="space-between"
+          align="baseline"
+          px={4}
+          py={3}
+          borderBottomWidth="1px"
+          borderColor="border.subtle"
+          gap={2}
+        >
           <Text fontWeight="700" fontSize="md">{title}</Text>
-        </Box>
+          {/* Labels the number column without a full header row — that row was
+              what forced fixed widths and wrapped "Toplam Skor" onto 3 lines. */}
+          <Text
+            fontSize="10px"
+            fontWeight="700"
+            letterSpacing="0.1em"
+            textTransform="uppercase"
+            color="text.muted"
+            flexShrink={0}
+            whiteSpace="nowrap"
+          >
+            {label}
+          </Text>
+        </HStack>
 
-        <Table.Root size="sm" style={{ tableLayout: 'fixed', width: '100%' }}>
-          <Table.Header>
-            <Table.Row>
-              <Table.ColumnHeader w="32px" px={2}>#</Table.ColumnHeader>
-              <Table.ColumnHeader px={2}>{tCommon('player')}</Table.ColumnHeader>
-              <Table.ColumnHeader display={{ base: 'none', lg: 'table-cell' }} px={2} w="70px">{tCommon('result')}</Table.ColumnHeader>
-              <Table.ColumnHeader textAlign="right" px={2} w="60px">{label}</Table.ColumnHeader>
-            </Table.Row>
-          </Table.Header>
-          <Table.Body>
-            {entries.map((entry) => {
-              const rawDisplay = formatRawScore(entry, t('dnf'));
-              return (
-                <Table.Row
-                  key={entry.userId}
-                  cursor="pointer"
-                  onClick={() => setSelected(entry)}
-                  _hover={{ bg: 'surface' }}
+        <Box>
+          {entries.map((entry, i) => {
+            const rawDisplay = formatRawScore(entry, t('dnf'));
+            const isLeader = topScore !== null && entry.normalizedScore === topScore;
+
+            return (
+              <HStack
+                key={entry.userId}
+                as="button"
+                w="full"
+                textAlign="left"
+                gap={3}
+                px={4}
+                py={2.5}
+                borderTopWidth={i === 0 ? 0 : '1px'}
+                borderColor="border.subtle"
+                cursor="pointer"
+                bg="transparent"
+                onClick={() => setSelected(entry)}
+                _hover={{ bg: 'surface' }}
+                transition="background 0.12s"
+              >
+                <Text
+                  fontFamily="mono"
+                  fontSize="sm"
+                  fontWeight="700"
+                  w="16px"
+                  flexShrink={0}
+                  color={isLeader ? 'brand.500' : 'text.muted'}
                 >
-                  <Table.Cell px={2}>
-                    <Text fontSize="sm" fontWeight="700" color={entry.rank <= 3 ? 'brand.500' : 'text.muted'}>
-                      {entry.rank}
-                    </Text>
-                  </Table.Cell>
-                  <Table.Cell px={2} style={{ overflow: 'hidden' }}>
-                    <HStack gap={2} overflow="hidden" minW={0}>
-                      <Avatar.Root size="xs" flexShrink={0}>
-                        <Avatar.Fallback name={entry.displayName} />
-                        {entry.avatarUrl && <Avatar.Image src={entry.avatarUrl} alt={entry.displayName} />}
-                      </Avatar.Root>
-                      <Box overflow="hidden" minW={0} flex={1}>
-                        <Text fontWeight="600" fontSize="xs" truncate>@{entry.username}</Text>
-                      </Box>
-                      {topScore !== null && entry.normalizedScore === topScore && (
-                        <Badge colorPalette="yellow" size="sm" variant="subtle" flexShrink={0} display={{ base: 'none', sm: 'inline-flex' }}>
-                          {t('leader')}
-                        </Badge>
-                      )}
-                    </HStack>
-                  </Table.Cell>
-                  <Table.Cell display={{ base: 'none', lg: 'table-cell' }} px={2}>
-                    {rawDisplay ? (
-                      <Text fontFamily="mono" fontSize="xs" color="text.muted" truncate>{rawDisplay}</Text>
-                    ) : (
-                      <Text color="text.muted" fontSize="xs">—</Text>
-                    )}
-                  </Table.Cell>
-                  <Table.Cell px={2}>
-                    <ScoreBar score={entry.normalizedScore} />
-                  </Table.Cell>
-                </Table.Row>
-              );
-            })}
-          </Table.Body>
-        </Table.Root>
+                  {entry.rank}
+                </Text>
+
+                <Avatar.Root size="xs" flexShrink={0}>
+                  <Avatar.Fallback name={entry.displayName} />
+                  {entry.avatarUrl && <Avatar.Image src={entry.avatarUrl} alt={entry.displayName} />}
+                </Avatar.Root>
+
+                <Text fontWeight="600" fontSize="sm" flex={1} minW={0} truncate>
+                  @{entry.username}
+                </Text>
+
+                {hasRawScores && (
+                  <Text
+                    fontFamily="mono"
+                    fontSize="xs"
+                    color="text.muted"
+                    flexShrink={0}
+                    whiteSpace="nowrap"
+                  >
+                    {rawDisplay ?? '—'}
+                  </Text>
+                )}
+
+                <Text
+                  fontFamily="mono"
+                  fontSize="sm"
+                  fontWeight="700"
+                  minW="44px"
+                  textAlign="right"
+                  flexShrink={0}
+                >
+                  {formatScore(entry.normalizedScore)}
+                </Text>
+              </HStack>
+            );
+          })}
+        </Box>
       </Box>
 
       {selected && (

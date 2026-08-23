@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Box, Grid, GridItem, Heading, HStack, Text, Button } from '@chakra-ui/react';
+import { Box, Grid, GridItem, HStack, Text, Button } from '@chakra-ui/react';
 import { useTranslations } from 'next-intl';
 import { LeaderboardTable } from './LeaderboardTable';
 import { LoadingState } from '../ui/LoadingState';
@@ -48,17 +48,21 @@ export function DailyLeaderboardWidget() {
     setDate(d.toISOString().slice(0, 10));
   };
 
+  // No wrapping card: each table already draws one, and nesting the same
+  // surface inside itself just muddies the edges.
   return (
-    <Box
-      bg="surface.card"
-      borderRadius="2xl"
-      borderWidth="1px"
-      borderColor="border.subtle"
-      p={{ base: 4, md: 6 }}
-    >
+    <Box>
       {/* Header */}
-      <HStack justify="space-between" mb={6} gap={3} flexWrap="wrap">
-        <Heading size="lg" fontWeight="800">{t('daily')}</Heading>
+      <HStack justify="space-between" mb={4} gap={3} flexWrap="wrap">
+        <Text
+          fontSize="xs"
+          fontWeight="700"
+          letterSpacing="0.1em"
+          textTransform="uppercase"
+          color="text.muted"
+        >
+          {t('daily')}
+        </Text>
         <HStack gap={2} flexShrink={0} flexWrap="wrap">
           <Button variant="outline" size="sm" onClick={handlePrevDay} aria-label={t('prevDay')}>←</Button>
           <Text fontFamily="mono" fontSize="sm" fontWeight="500" color="text.muted" px={1}>{date}</Text>
@@ -85,7 +89,7 @@ export function DailyLeaderboardWidget() {
             {data.parolla.length === 0 && <EmptyState title={t('noParolla')} description={t('beFirst')} />}
           </GridItem>
           <GridItem minW={0}>
-            <LeaderboardTable title={t('overall')} entries={data.total} scoreLabel={t('totalScore')} />
+            <LeaderboardTable title={t('overall')} entries={data.total} />
             {data.total.length === 0 && <EmptyState title={t('noCombined')} description={t('submitBoth')} />}
           </GridItem>
         </Grid>
