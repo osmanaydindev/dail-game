@@ -17,50 +17,6 @@ body {
   overscroll-behavior-y: none;
 }
 
-/* ─── Floating animation ─────────────────────────────────────────────────── */
-@keyframes ao-float {
-  0%, 100% { transform: translateY(0px) rotate(0deg); }
-  33%       { transform: translateY(-14px) rotate(4deg); }
-  66%       { transform: translateY(-6px) rotate(-3deg); }
-}
-.ao-float { animation: ao-float 5s ease-in-out infinite; }
-
-/* ─── Animated gradient text ─────────────────────────────────────────────── */
-@keyframes ao-gradient-shift {
-  0%   { background-position: 0% 50%; }
-  100% { background-position: 300% 50%; }
-}
-.ao-gradient-text {
-  background: linear-gradient(90deg, #3a5fff, #8b5cf6, #ec4899, #f59e0b, #3a5fff);
-  background-size: 300% auto;
-  background-clip: text;
-  -webkit-background-clip: text;
-  color: transparent;
-  animation: ao-gradient-shift 5s linear infinite;
-  display: inline-block;
-}
-
-/* ─── CTA button glow pulse ──────────────────────────────────────────────── */
-/* Animate only opacity of a pre-rendered shadow ring (compositor-only) instead
-   of animating box-shadow itself, which repaints every frame and janks on mobile. */
-.ao-cta-glow { position: relative; isolation: isolate; }
-.ao-cta-glow::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  box-shadow: 0 0 0 7px rgba(58, 95, 255, 0.35);
-  opacity: 0;
-  pointer-events: none;
-  z-index: -1;
-  will-change: opacity;
-  animation: ao-glow-pulse 2.5s ease-in-out infinite;
-}
-@keyframes ao-glow-pulse {
-  0%, 100% { opacity: 0; }
-  50%      { opacity: 1; }
-}
-
 /* ─── Score bar fill ─────────────────────────────────────────────────────── */
 @keyframes ao-bar-fill {
   from { width: 0; opacity: 0.3; }
@@ -91,13 +47,6 @@ body {
 @keyframes ao-spin-slow {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }
-}
-
-/* ─── Mobile: drop continuously-repainting effects to keep scrolling smooth ── */
-@media (max-width: 767px) {
-  /* background-position animation on background-clip:text repaints glyphs every
-     frame — keep the gradient, lose the per-frame repaint on phones. */
-  .ao-gradient-text { animation: none; }
 }
 
 /* ─── Tavla: landscape-only sidebar action column (hidden in portrait) ──────── */
@@ -285,9 +234,6 @@ body {
 
 /* ─── Respect reduced-motion preference ──────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
-  .ao-float,
-  .ao-gradient-text,
-  .ao-cta-glow::after,
   .ao-row-in,
   .ao-fade-up,
   .ao-spin-slow,

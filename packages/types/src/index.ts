@@ -4,6 +4,16 @@ export type Role = 'admin' | 'user';
 
 export type GameSlug = 'wordle' | 'parolla';
 
+/**
+ * Weights for the combined daily score. Shared so the frontend can preview a
+ * score without re-deriving numbers the backend owns — if these drift, the
+ * home page and the leaderboard disagree.
+ */
+export const SCORE_WEIGHTS: Record<GameSlug, number> = {
+  wordle: 0.4,
+  parolla: 0.6,
+};
+
 // ─── API response envelope ────────────────────────────────────────────────────
 
 export interface ApiResponse<T = unknown> {

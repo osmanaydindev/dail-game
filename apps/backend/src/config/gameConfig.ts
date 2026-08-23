@@ -25,12 +25,10 @@ function normalizeParolla(scores: Record<string, number>): number {
   return effective / 26;
 }
 
-// Combined daily score weights — must sum to 1.
-// Parolla is the longer/harder game (5 min, 26 letters), so it carries more weight.
-export const SCORE_WEIGHTS: Record<GameSlug, number> = {
-  wordle: 0.4,
-  parolla: 0.6,
-};
+// Combined daily score weights — must sum to 1. Parolla is the longer/harder
+// game (5 min, 26 letters), so it carries more weight. Defined in the shared
+// types package so the frontend reads the same numbers.
+export { SCORE_WEIGHTS } from '@dail-game/types';
 
 export const GAME_CONFIG: Record<GameSlug, GameConfig> = {
   wordle: {

@@ -223,10 +223,24 @@
     "result": "Result"
   },
   "home": {
-    "title": "Daily Game",
-    "titleHighlight": "Leaderboard",
-    "subtitle": "Track your Wordle and Parolla scores. Compete daily, weekly, and monthly.",
-    "submitScore": "Submit Today's Score →",
-    "fullLeaderboard": "Full Leaderboard"
+    "headlineOne": "Wordle and Parolla.",
+    "headlineTwo": "One leaderboard.",
+    "subtitle": "Two games a day, one table. At midnight the board resets and everyone starts over.",
+    "submitScore": "Submit today's score",
+    "fullLeaderboard": "Full leaderboard",
+    "resetsIn": "Next day",
+    "yourDay": "Your day",
+    "notPlayed": "not played yet",
+    "solved": "guesses used",
+    "failed": "not solved",
+    "correctCount": "correct answers",
+    "combined": "Daily",
+    "dnf": "DNF",
+    "howTitle": "How it works",
+    "step1": "Play Wordle, then enter how many guesses it took.",
+    "step2": "Play Parolla, then enter how many you got right.",
+    "step3": "Your daily score weights the two: Wordle {wordle}% · Parolla {parolla}%.",
+    "step4": "At midnight (Istanbul time) the board resets and new words drop.",
+    "weightedTotal": "weighted total"
   }
 }

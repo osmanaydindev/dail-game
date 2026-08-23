@@ -223,10 +223,24 @@
     "result": "Sonuç"
   },
   "home": {
-    "title": "Günlük Oyun",
-    "titleHighlight": "Sıralaması",
-    "subtitle": "Wordle ve Parolla skorlarını takip et. Günlük, haftalık ve aylık yarış.",
-    "submitScore": "Bugünkü Skoru Gir →",
-    "fullLeaderboard": "Tam Sıralama"
+    "headlineOne": "Wordle ve Parolla.",
+    "headlineTwo": "Tek sıralama.",
+    "subtitle": "Her gün iki oyun, tek tablo. Gece yarısı tahta sıfırlanır, herkes baştan başlar.",
+    "submitScore": "Bugünkü skoru gir",
+    "fullLeaderboard": "Tam sıralama",
+    "resetsIn": "Yeni gün",
+    "yourDay": "Bugün sen",
+    "notPlayed": "henüz oynamadın",
+    "solved": "denemede bildin",
+    "failed": "bulamadın",
+    "correctCount": "doğru cevap",
+    "combined": "Günlük",
+    "dnf": "DNF",
+    "howTitle": "Nasıl işliyor",
+    "step1": "Wordle'ı oyna, kaç denemede bildiğini gir.",
+    "step2": "Parolla'yı oyna, kaç doğru yaptığını gir.",
+    "step3": "Günlük skorun ikisinin ağırlıklı toplamı: Wordle %{wordle} · Parolla %{parolla}.",
+    "step4": "Gece yarısı (Türkiye saati) tahta sıfırlanır, yeni kelimeler gelir.",
+    "weightedTotal": "ağırlıklı toplam"
   }
 }
