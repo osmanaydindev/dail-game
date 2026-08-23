@@ -509,8 +509,10 @@ Seed is idempotent — safe to run multiple times.
 - **`useTranslations`** — Hem server hem client component'larda çalışır. `[locale]/layout.tsx` içindeki `NextIntlClientProvider` sayesinde provider zinciri kurulu.
 - **Mongoose duplicate index** — `unique: true` zaten index oluşturur; `schema.index({ email: 1 })` ayrıca yazılmamalı.
 - **next-intl plugin** — `next.config.ts`'de `createNextIntlPlugin` ve `src/i18n/request.ts` birlikte olmak zorunda. Biri eksik olursa "Couldn't find next-intl config file" hatası gelir.
-- **`GameKeyboard`** — Wordle ve Parolla aynı klavyeyi paylaşır (`components/game/GameKeyboard.tsx`). `fixed` prop'u: Wordle `true` (viewport'un altına sabitlenir, kendi spacer'ını ölçer), Parolla `false` (sabit yükseklikli flex kolonun içinde akar).
-- **Parolla cevap alanı gerçek `<input>` değil** — sistem klavyesi açılırsa soru/timer/harfler ekrandan taşıyor. Klavyeyi `readOnly` değil, doğrudan `<Box>` + sahte caret ile çözdük. Fiziksel klavye desteği `window` keydown listener'ında.
+- **`GameKeyboard`** — **sadece Wordle** kullanır (`components/game/GameKeyboard.tsx`). Viewport'un altına sabitlenir ve kendi spacer'ını `ResizeObserver` ile ölçer. Parolla'ya da eklenmişti, sonra geri alındı (aşağıya bak).
+- **Parolla telefonun kendi klavyesini kullanır**, ekran içi klavye değil. Sorun "klavye açılınca soru/süre/harfler görünmüyor"du; çözüm klavyeyi değiştirmek değil, **görünür alana sığdırmak**: iOS'ta `window.innerHeight` klavye açılınca küçülmez, sadece `visualViewport` gerçek görünür kutuyu bildirir. `ParollaGame` yüksekliğini `visualViewport.height` üzerinden hesaplar (`resize` + `scroll` dinler). Uzun sorular karakter sayısına göre küçülür.
+- **`minH="100dvh"` kullan, `100vh` değil** — iOS Safari'de `vh`, tarayıcı çubuğu gizliyken ölçülen yüksekliktir; kısa sayfalar ekrandan uzun olur ve içerik bittikten sonra kaymaya devam eder. `AppShell` ve tüm auth sayfaları `dvh` kullanır.
+- **`html, body` arka planı `globals.css`'te boyanır** — uygulama kabuğu dışında kalan alan (iOS rubber-band overscroll, `viewport-fit: cover` safe-area) döküman arka planını gösterir; boyanmazsa koyu temada altta siyah bant olarak okunur.
 - **`emailVerified` migration** — bu alan eklendikten sonra `npm run seed` bir kez çalıştırılmalı; eski kullanıcı kayıtlarında alan yok ve `undefined` falsy olduğu için giriş yapamazlar.
 - **`SCORE_WEIGHTS`** — günlük/haftalık/aylık toplam skorun tek kaynağı (`config/gameConfig.ts`). Ağırlık değişirse `leaderboard.service.ts` içindeki iki yol da (daily + period aggregation) otomatik uyar.
 

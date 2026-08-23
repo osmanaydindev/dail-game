@@ -80,7 +80,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <Box minH="100vh" bg="surface" display="flex" alignItems="center" justifyContent="center" p={4}>
+    <Box minH="100dvh" bg="surface" display="flex" alignItems="center" justifyContent="center" p={4}>
       <Box
         w="full"
         maxW="440px"

@@ -1,3 +1,22 @@
+/* ─── Page background ────────────────────────────────────────────────────── */
+/* The app shell paints `surface`, but anything outside it — the iOS rubber-band
+   overscroll area and the safe-area insets under `viewport-fit: cover` — shows
+   the document background instead. Left at the default that reads as a black
+   band below the content on a dark theme. Painting html/body with the same
+   token keeps it invisible whatever the browser does at the edges. */
+html,
+body {
+  background-color: #ffffff;
+}
+html.dark,
+html.dark body {
+  background-color: #111827; /* = semantic token `surface`, _dark */
+}
+/* Stops the rubber-band from revealing anything beyond the page at all. */
+body {
+  overscroll-behavior-y: none;
+}
+
 /* ─── Floating animation ─────────────────────────────────────────────────── */
 @keyframes ao-float {
   0%, 100% { transform: translateY(0px) rotate(0deg); }
@@ -66,12 +85,6 @@
 @keyframes ao-shimmer {
   0%   { background-position: -200% 0; }
   100% { background-position:  200% 0; }
-}
-
-/* ─── Parolla: fake text caret (the answer field is not a real input) ────── */
-@keyframes ao-caret-blink {
-  0%, 49%   { opacity: 1; }
-  50%, 100% { opacity: 0; }
 }
 
 /* ─── Spin (decorative) ──────────────────────────────────────────────────── */

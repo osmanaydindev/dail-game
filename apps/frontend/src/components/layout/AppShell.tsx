@@ -19,7 +19,10 @@ export function AppShell({
   const pathname = usePathname();
 
   return (
-    <Box minH="100vh" bg="surface" className={hideNavOnLandscape ? 'ao-immersive-landscape' : undefined}>
+    // 100dvh, not 100vh: on iOS Safari `vh` is the height with the browser
+    // chrome collapsed, so a short page ends up taller than the screen and
+    // keeps scrolling after the content has clearly ended.
+    <Box minH="100dvh" bg="surface" className={hideNavOnLandscape ? 'ao-immersive-landscape' : undefined}>
       <Navbar />
       <AnimatePresence mode="popLayout">
         <motion.main

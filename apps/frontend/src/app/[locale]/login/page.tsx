@@ -65,7 +65,7 @@ export default function LoginPage() {
   };
 
   return (
-    <Box minH="100vh" bg="surface" display="flex" alignItems="center" justifyContent="center" p={4}>
+    <Box minH="100dvh" bg="surface" display="flex" alignItems="center" justifyContent="center" p={4}>
       <Box w="full" maxW="400px" bg="surface.card" borderRadius="2xl" borderWidth="1px" borderColor="border.subtle" p={8} boxShadow="lg">
         <VStack gap={8} align="stretch">
           <VStack gap={2} align="center">

@@ -1,12 +1,11 @@
 'use client';
 
 import { useState, useEffect, useLayoutEffect, useRef, useCallback } from 'react';
-import { Box, VStack, HStack, Text, Spinner, Alert } from '@chakra-ui/react';
+import { Box, VStack, HStack, Text, Input, Spinner, Alert } from '@chakra-ui/react';
 import { api } from '@/lib/api';
 import { todayLocal } from '@/lib/date';
 import { getDailyQuestions, checkAnswer } from '@/lib/parollaData';
 import { useAuthStore } from '@/store/authStore';
-import { GameKeyboard } from '@/components/game/GameKeyboard';
 import type { AxiosError } from 'axios';
 import type { ApiResponse } from '@dail-game/types';
 
@@ -448,28 +447,43 @@ export function ParollaGame() {
   const [inputError,  setInputError]  = useState<string | null>(null);
 
   const rootRef         = useRef<HTMLDivElement>(null);
+  const inputRef        = useRef<HTMLInputElement>(null);
   const bubblesRef      = useRef<HTMLDivElement>(null);
   const bubbleRefsArr   = useRef<(HTMLDivElement | null)[]>([]);
   const revisitModeRef  = useRef(false);
 
-  // Available height below whatever the page renders above us. The on-screen
-  // keyboard means the system keyboard never opens, so the viewport is stable
-  // and everything (letters, timer, question, answer, keyboard) fits at once.
+  // Height of the area still visible once the phone's keyboard is up.
+  //
+  // `window.innerHeight` does not shrink when iOS opens the keyboard — only
+  // `visualViewport` reports the real visible box. Sizing the game to it is what
+  // keeps the letters, timer, question and answer field on screen together
+  // instead of being pushed behind the keyboard.
   const [availableHeight, setAvailableHeight] = useState<number | null>(null);
 
   useLayoutEffect(() => {
     if (gameStatus !== 'playing') { setAvailableHeight(null); return; }
+
+    const vv = window.visualViewport;
     const update = () => {
       const el = rootRef.current;
       if (!el) return;
-      const top = el.getBoundingClientRect().top + window.scrollY;
-      // -40px covers AppShell's bottom padding so the page itself never scrolls.
-      setAvailableHeight(Math.max(320, window.innerHeight - top - 40));
+      // getBoundingClientRect is relative to the layout viewport; offsetTop is
+      // how far the visual viewport has been shifted inside it.
+      const top = el.getBoundingClientRect().top - (vv?.offsetTop ?? 0);
+      const viewportHeight = vv?.height ?? window.innerHeight;
+      // -40 leaves room for AppShell's bottom padding (2rem) plus a small gap,
+      // so the page itself never gains a scrollbar.
+      setAvailableHeight(Math.max(260, viewportHeight - top - 40));
     };
+
     update();
+    vv?.addEventListener('resize', update);
+    vv?.addEventListener('scroll', update);
     window.addEventListener('resize', update);
     window.addEventListener('orientationchange', update);
     return () => {
+      vv?.removeEventListener('resize', update);
+      vv?.removeEventListener('scroll', update);
       window.removeEventListener('resize', update);
       window.removeEventListener('orientationchange', update);
     };
@@ -534,6 +548,11 @@ export function ParollaGame() {
     }
   }, [timeLeft, gameStatus]);
 
+  // ── Keep the keyboard up between questions ────────────────────────────────
+  useEffect(() => {
+    if (gameStatus === 'playing') inputRef.current?.focus();
+  }, [gameStatus, currentIdx]);
+
   // ── Aktif harfi container'da ortala ──────────────────────────────────────
   useEffect(() => {
     const container = bubblesRef.current;
@@ -589,6 +608,9 @@ export function ParollaGame() {
   // ── Start (ready → playing) ───────────────────────────────────────────────
   const handleStart = useCallback(() => {
     setGameStatus('playing');
+    // Must run from the tap handler's call stack or iOS refuses to open the
+    // keyboard; the timeout keeps it in the same user-gesture window.
+    setTimeout(() => inputRef.current?.focus(), 0);
   }, []);
 
   // ── Submit answer ─────────────────────────────────────────────────────────
@@ -625,43 +647,12 @@ export function ParollaGame() {
   }, [gameStatus, results, currentIdx, advance]);
 
   // ── Keyboard ──────────────────────────────────────────────────────────────
-  const appendChar = useCallback((char: string) => {
-    if (gameStatus !== 'playing') return;
-    setInputError(null);
-    setUserInput(v => v + char);
-  }, [gameStatus]);
-
-  // On-screen keys arrive upper-case; store them the way the player would type.
-  const pressLetter = useCallback((letter: string) => {
-    appendChar(letter.toLocaleLowerCase('tr-TR'));
-  }, [appendChar]);
-
-  const pressSpace = useCallback(() => {
-    // Parolla answers can be multi-word, but never start with a space.
-    setUserInput(v => (v.length === 0 || v.endsWith(' ') ? v : v + ' '));
-  }, []);
-
-  const pressDelete = useCallback(() => {
-    if (gameStatus !== 'playing') return;
-    setInputError(null);
-    setUserInput(v => v.slice(0, -1));
-  }, [gameStatus]);
-
-  // Physical keyboard (desktop). The answer field is not a real input any more,
-  // so this listener lives on window like Wordle's.
-  useEffect(() => {
-    if (gameStatus !== 'playing') return;
-    const handle = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey) return;
-      if (e.key === 'Enter')     { e.preventDefault(); handleSubmit(); return; }
-      if (e.key === 'Tab')       { e.preventDefault(); handleSkip(); return; }
-      if (e.key === 'Backspace') { e.preventDefault(); pressDelete(); return; }
-      if (e.key === ' ')         { e.preventDefault(); pressSpace(); return; }
-      if (e.key.length === 1)    { e.preventDefault(); appendChar(e.key); }
-    };
-    window.addEventListener('keydown', handle);
-    return () => window.removeEventListener('keydown', handle);
-  }, [gameStatus, handleSubmit, handleSkip, pressDelete, pressSpace, appendChar]);
+  // The answer field is a real <input>, so the phone's own keyboard is used and
+  // key handling stays local — no window listener, which would double-type.
+  const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') { e.preventDefault(); handleSubmit(); }
+    else if (e.key === 'Tab') { e.preventDefault(); handleSkip(); }
+  }, [handleSubmit, handleSkip]);
 
   // ─────────────────────────────────────────────────────────────────────────
   if (loadError) {
@@ -683,6 +674,21 @@ export function ParollaGame() {
   }
 
   const current = results[currentIdx];
+
+  const tally = {
+    correct: results.filter(r => r.status === 'correct').length,
+    wrong: results.filter(r => r.status === 'wrong').length,
+    skipped: results.filter(r => r.status === 'skipped').length,
+  };
+
+  // Long questions shrink instead of pushing the answer field off screen. Paired
+  // with `overflowY` on the question box so an extreme one still scrolls.
+  const q = current?.question ?? '';
+  const questionSize =
+    q.length > 110 ? { base: 'sm', md: 'lg' } :
+    q.length > 80  ? { base: 'md', md: 'xl' } :
+    q.length > 50  ? { base: 'lg', md: '2xl' } :
+                     { base: 'xl', md: '2xl' };
 
   return (
     <Box
@@ -767,10 +773,11 @@ export function ParollaGame() {
       >
         {gameStatus === 'playing' && current && (
           <Text
-            fontSize={{ base: 'lg', md: '2xl' }}
+            fontSize={questionSize}
             fontWeight="800"
             textAlign="center"
             letterSpacing="wider"
+            lineHeight={1.25}
           >
             {current.question}
           </Text>
@@ -786,9 +793,8 @@ export function ParollaGame() {
         />
       )}
 
-      {/* Answer field + on-screen keyboard */}
+      {/* Answer field — the phone's own keyboard opens below it */}
       {gameStatus === 'playing' && (
-        <>
         <Box px={{ base: 3, md: 4 }} pb={2} w="full" maxW="600px" mx="auto" flexShrink={0}>
           {inputError && (
             <Box
@@ -829,37 +835,27 @@ export function ParollaGame() {
               </Box>
             )}
 
-            {/* Not a real <input> — the on-screen keyboard is the only text
-                source, so the mobile system keyboard never covers the screen. */}
-            <Box
-              flex={1}
+            <Input
+              ref={inputRef}
+              value={userInput}
+              onChange={e => { setUserInput(e.target.value); if (inputError) setInputError(null); }}
+              onKeyDown={handleKeyDown}
+              placeholder="Cevabı Yaz"
+              border="none"
+              borderRadius="0"
+              _focus={{ boxShadow: 'none' }}
+              fontSize="md"
               h="56px"
               px={4}
               minW={0}
-              display="flex"
-              alignItems="center"
-              overflow="hidden"
-            >
-              <Text
-                fontSize="md"
-                color={userInput ? undefined : 'text.muted'}
-                whiteSpace="pre"
-                overflow="hidden"
-                minW={0}
-                css={{ direction: 'rtl', textAlign: 'left' }}
-              >
-                {userInput || 'Cevabı Yaz'}
-              </Text>
-              <Box
-                as="span"
-                w="2px"
-                h="24px"
-                ml="2px"
-                bg="brand.500"
-                flexShrink={0}
-                css={{ animation: 'ao-caret-blink 1.1s step-end infinite' }}
-              />
-            </Box>
+              // 16px font and no autocorrect: anything smaller makes iOS zoom
+              // the page on focus, which breaks the fitted layout.
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
+              enterKeyHint="send"
+            />
 
             <Box
               as="button"
@@ -884,19 +880,26 @@ export function ParollaGame() {
               <Text>{userInput.trim() ? 'Gönder' : 'PAS'}</Text>
             </Box>
           </HStack>
-        </Box>
 
-        <GameKeyboard
-          fixed={false}
-          actionLabel={userInput.trim() ? 'GÖNDER' : 'PAS'}
-          actionColor={userInput.trim() ? '#538d4e' : '#c9a227'}
-          onAction={userInput.trim() ? handleSubmit : handleSkip}
-          onKey={pressLetter}
-          onDelete={pressDelete}
-          showSpace
-          onSpace={pressSpace}
-        />
-        </>
+          {/* Running tally — the last thing above the phone's keyboard */}
+          <HStack justify="center" gap={5} mt={2.5} fontSize="sm" fontWeight="700">
+            <HStack gap={1.5}>
+              <Text color="#538d4e">✓</Text>
+              <Text color="#538d4e">{tally.correct}</Text>
+              <Text color="text.muted" fontWeight="500">Doğru</Text>
+            </HStack>
+            <HStack gap={1.5}>
+              <Text color="#c0392b">✗</Text>
+              <Text color="#c0392b">{tally.wrong}</Text>
+              <Text color="text.muted" fontWeight="500">Yanlış</Text>
+            </HStack>
+            <HStack gap={1.5}>
+              <Text color="#c9a227">▷</Text>
+              <Text color="#c9a227">{tally.skipped}</Text>
+              <Text color="text.muted" fontWeight="500">Pas</Text>
+            </HStack>
+          </HStack>
+        </Box>
       )}
     </Box>
   );

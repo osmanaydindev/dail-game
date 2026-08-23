@@ -69,26 +69,13 @@ export interface GameKeyboardProps {
   /** A letter key was pressed (always upper-case Turkish). */
   onKey: (letter: string) => void;
   onDelete: () => void;
-  /** The action key — Wordle: submit guess, Parolla: submit answer / skip. */
+  /** The action key — submits the current guess. */
   onAction: () => void;
   actionLabel: string;
-  /** Background for the action key. Omit for the neutral Wordle look. */
+  /** Background for the action key. Omit for the neutral default. */
   actionColor?: string;
-  /** Per-letter colouring. Wordle only — Parolla leaves this out. */
+  /** Per-letter colouring after a guess is scored. */
   keyStatuses?: Record<string, KeyStatus>;
-  /**
-   * Adds a space bar row. Parolla answers can be multi-word
-   * (`checkAnswer` compares the whole trimmed string).
-   */
-  showSpace?: boolean;
-  onSpace?: () => void;
-  /**
-   * `true` (default) pins the keyboard to the bottom of the viewport and
-   * reserves an equally tall in-flow spacer above it, so page content is
-   * never hidden underneath. `false` renders it in the normal flow — use
-   * that inside a fixed-height flex column (Parolla).
-   */
-  fixed?: boolean;
 }
 
 export function GameKeyboard({
@@ -98,24 +85,20 @@ export function GameKeyboard({
   actionLabel,
   actionColor,
   keyStatuses,
-  showSpace = false,
-  onSpace,
-  fixed = true,
 }: GameKeyboardProps) {
   const barRef = useRef<HTMLDivElement>(null);
   const [barHeight, setBarHeight] = useState(0);
 
   // Measure the real bar height instead of hard-coding a spacer — the bar grows
-  // with the space row, the md breakpoint and the iOS safe-area inset.
+  // with the md breakpoint and the iOS safe-area inset.
   useLayoutEffect(() => {
-    if (!fixed) return;
     const el = barRef.current;
     if (!el) return;
     const observer = new ResizeObserver(() => setBarHeight(el.offsetHeight));
     observer.observe(el);
     setBarHeight(el.offsetHeight);
     return () => observer.disconnect();
-  }, [fixed]);
+  }, []);
 
   const press = useCallback((key: string) => {
     if (key === DELETE_LABEL) onDelete();
@@ -151,63 +134,32 @@ export function GameKeyboard({
         ))}
         <KeyboardKey label={DELETE_LABEL} wide onPress={onDelete} />
       </HStack>
-
-      {showSpace && (
-        <HStack gap={{ base: 0.5, md: 1 }} justify="center" w="full" px={{ base: 8, md: 12 }}>
-          <Box
-            as="button"
-            onClick={onSpace}
-            flex={1}
-            h={{ base: '38px', md: '44px' }}
-            borderRadius="6px"
-            bg="surface.card"
-            border="1px solid"
-            borderColor="border.subtle"
-            fontSize="xs"
-            fontWeight="700"
-            color="text.muted"
-            cursor="pointer"
-            userSelect="none"
-            _hover={{ opacity: 0.8 }}
-            _active={{ opacity: 0.6 }}
-            transition="opacity 0.1s"
-            style={{ WebkitTapHighlightColor: 'transparent' }}
-          >
-            boşluk
-          </Box>
-        </HStack>
-      )}
     </VStack>
   );
 
-  const bar = (
-    <Box
-      ref={barRef}
-      position={fixed ? 'fixed' : 'relative'}
-      bottom={fixed ? 0 : undefined}
-      left={fixed ? 0 : undefined}
-      right={fixed ? 0 : undefined}
-      zIndex={fixed ? 1000 : undefined}
-      w="full"
-      flexShrink={0}
-      bg="surface"
-      borderTopWidth="1px"
-      borderColor="border.subtle"
-      pt={2}
-      px={2}
-      // Bottom padding clears the iOS home indicator on notched devices.
-      style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
-    >
-      {rows}
-    </Box>
-  );
-
-  if (!fixed) return bar;
-
   return (
     <>
+      {/* In-flow spacer matching the fixed bar, so the board is never hidden
+          behind it. Measured rather than hard-coded — see above. */}
       <Box h={`${barHeight}px`} flexShrink={0} aria-hidden="true" />
-      {bar}
+      <Box
+        ref={barRef}
+        position="fixed"
+        bottom={0}
+        left={0}
+        right={0}
+        zIndex={1000}
+        w="full"
+        bg="surface"
+        borderTopWidth="1px"
+        borderColor="border.subtle"
+        pt={2}
+        px={2}
+        // Bottom padding clears the iOS home indicator on notched devices.
+        style={{ paddingBottom: 'calc(0.75rem + env(safe-area-inset-bottom))' }}
+      >
+        {rows}
+      </Box>
     </>
   );
 }
