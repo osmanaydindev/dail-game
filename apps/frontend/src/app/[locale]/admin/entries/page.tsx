@@ -44,7 +44,10 @@ export default function AdminEntriesPage() {
   const [gameFilter, setGameFilter] = useState('');
   const [editing, setEditing] = useState<DailyEntryPublic | null>(null);
   const [editFields, setEditFields] = useState<Record<string, number>>({});
-  const [editMsg, setEditMsg] = useState<string | null>(null);
+  // Failures stay inside the dialog so the admin can retry; the success notice
+  // lives on the page, because the dialog is gone by the time it shows.
+  const [editError, setEditError] = useState<string | null>(null);
+  const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const gameCollection = createListCollection({
@@ -75,18 +78,21 @@ export default function AdminEntriesPage() {
   const openEdit = (entry: DailyEntryPublic) => {
     setEditing(entry);
     setEditFields({ ...(entry.scores as Record<string, number>) });
-    setEditMsg(null);
+    setEditError(null);
+    setActionMsg(null);
   };
 
   const saveEdit = async () => {
     if (!editing) return;
     setSaving(true);
+    setEditError(null);
     try {
       await api.patch(`/admin/entries/${editing._id}`, { scores: editFields });
-      setEditMsg(t('entryUpdated'));
+      setEditing(null);
+      setActionMsg(t('entryUpdated'));
       fetchEntries();
     } catch {
-      setEditMsg(tCommon('error'));
+      setEditError(tCommon('error'));
     } finally {
       setSaving(false);
     }
@@ -105,6 +111,13 @@ export default function AdminEntriesPage() {
   return (
     <AppShell>
       <Heading size="xl" fontWeight="800" mb={6}>{t('entries')}</Heading>
+
+      {actionMsg && (
+        <Alert.Root status="success" borderRadius="lg" mb={4}>
+          <Alert.Indicator />
+          <Alert.Title>{actionMsg}</Alert.Title>
+        </Alert.Root>
+      )}
 
       <HStack mb={5} gap={3} wrap="wrap">
         <Input
@@ -187,10 +200,10 @@ export default function AdminEntriesPage() {
               <Dialog.Title>{t('editEntry')}</Dialog.Title>
             </Dialog.Header>
             <Dialog.Body>
-              {editMsg && (
-                <Alert.Root status={editMsg === t('entryUpdated') ? 'success' : 'error'} borderRadius="lg" mb={4}>
+              {editError && (
+                <Alert.Root status="error" borderRadius="lg" mb={4}>
                   <Alert.Indicator />
-                  <Alert.Title>{editMsg}</Alert.Title>
+                  <Alert.Title>{editError}</Alert.Title>
                 </Alert.Root>
               )}
               <VStack gap={4}>
