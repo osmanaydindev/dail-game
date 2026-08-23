@@ -31,6 +31,8 @@ interface SavedState {
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const GAME_DURATION = 300;
+/** Below this the game can't fit the viewport and the page stays scrollable. */
+const MIN_BOARD_HEIGHT = 260;
 const storageKey = (userId: string) => `parolla-game-state-${userId}`;
 
 const STATUS_BG: Record<LetterStatus, string> = {
@@ -459,9 +461,15 @@ export function ParollaGame() {
   // keeps the letters, timer, question and answer field on screen together
   // instead of being pushed behind the keyboard.
   const [availableHeight, setAvailableHeight] = useState<number | null>(null);
+  // Only locked once we know the game actually fits; see below.
+  const [lockPageScroll, setLockPageScroll] = useState(false);
 
   useLayoutEffect(() => {
-    if (gameStatus !== 'playing') { setAvailableHeight(null); return; }
+    if (gameStatus !== 'playing') {
+      setAvailableHeight(null);
+      setLockPageScroll(false);
+      return;
+    }
 
     const vv = window.visualViewport;
     const update = () => {
@@ -473,7 +481,11 @@ export function ParollaGame() {
       const viewportHeight = vv?.height ?? window.innerHeight;
       // -40 leaves room for AppShell's bottom padding (2rem) plus a small gap,
       // so the page itself never gains a scrollbar.
-      setAvailableHeight(Math.max(260, viewportHeight - top - 40));
+      const raw = viewportHeight - top - 40;
+      setAvailableHeight(Math.max(MIN_BOARD_HEIGHT, raw));
+      // Below the floor the game no longer fits (very short window); leave the
+      // page scrollable then, or the overflow would be unreachable.
+      setLockPageScroll(raw >= MIN_BOARD_HEIGHT);
     };
 
     update();
@@ -488,6 +500,20 @@ export function ParollaGame() {
       window.removeEventListener('orientationchange', update);
     };
   }, [gameStatus]);
+
+  // Freezing the page is what stops the gaps between the letters, timer and
+  // question from growing as you scroll: `getBoundingClientRect().top` shrinks
+  // while scrolling, which inflates the computed height, which makes the page
+  // taller, which allows more scrolling — a feedback loop. The game is sized to
+  // the viewport anyway, so there is nothing below it worth reaching.
+  useEffect(() => {
+    if (!lockPageScroll) return;
+    const body = document.body;
+    const previous = body.style.overflow;
+    body.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+    return () => { body.style.overflow = previous; };
+  }, [lockPageScroll]);
 
   // ── Load ──────────────────────────────────────────────────────────────────
   useEffect(() => {
