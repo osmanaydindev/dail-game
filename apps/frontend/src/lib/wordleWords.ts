@@ -2,17 +2,19 @@ import { todayLocal } from './date';
 
 // Curated answer list — these are the daily puzzle words.
 // Validation against all ~5600 words happens via wordleValid.ts (lazy-loaded).
+// Uppercase with the Turkish locale only: 'çiçek'.toUpperCase() yields ÇIÇEK,
+// 'çiçek'.toLocaleUpperCase('tr-TR') yields ÇİÇEK. Every word here is the tr-TR form.
 export const WORDS: string[] = [
   // A
-  'AKŞAM', 'ALÇAK', 'ALARM', 'ALTIN', 'AMBAR', 'ANLAM', 'ANTİK', 'ARABA', 'ARAZI', 'ARMUT',
+  'AKŞAM', 'ALÇAK', 'ALARM', 'ALTIN', 'AMBAR', 'ANLAM', 'ANTİK', 'ARABA', 'ARAZİ', 'ARMUT',
   'ASKER', 'ATLAS', 'AZGIN',
   // B
   'BAHÇE', 'BALIK', 'BALYA', 'BANKA', 'BAYIR', 'BEBEK', 'BEYAZ', 'BÖLÜM', 'BORSA', 'BOZUK',
   'BUKET', 'BULUT', 'BÜYÜK', 'BÜTÜN',
   // C-Ç
-  'CEKET', 'ÇANTA', 'ÇAYIR', 'ÇIÇEK', 'ÇIKIŞ', 'ÇORAP', 'ÇORBA', 'ÇÖZÜM',
+  'CEKET', 'ÇANTA', 'ÇAYIR', 'ÇİÇEK', 'ÇIKIŞ', 'ÇORAP', 'ÇORBA', 'ÇÖZÜM',
   // D
-  'DAİRE', 'DALGA', 'DENİZ', 'DEMET', 'DENEY', 'DERGİ', 'DILEK', 'DOĞRU', 'DOLAP', 'DÖNÜŞ',
+  'DAİRE', 'DALGA', 'DENİZ', 'DEMET', 'DENEY', 'DERGİ', 'DİLEK', 'DOĞRU', 'DOLAP', 'DÖNÜŞ',
   'DUMAN', 'DÜŞÜK',
   // E
   'EKMEK', 'EKRAN', 'ELMAS', 'ERKEN', 'EYLEM',
@@ -27,8 +29,8 @@ export const WORDS: string[] = [
   'İKLİM', 'İNCİR', 'İNSAN',
   // K
   'KABUL', 'KABUS', 'KAĞIT', 'KAHVE', 'KALEM', 'KANCA', 'KAPAK', 'KANAT', 'KARAR', 'KARIN',
-  'KAVUN', 'KAZAK', 'KAZAN', 'KEBAP', 'KENAR', 'KESİN', 'KILIÇ', 'KILIM', 'KİLİT', 'KİRAZ',
-  'KİTAP', 'KLIMA', 'KOMŞU', 'KONAK', 'KOPUŞ', 'KORKU', 'KOVAN', 'KOYUN', 'KÖPEK', 'KÖPRÜ',
+  'KAVUN', 'KAZAK', 'KAZAN', 'KEBAP', 'KENAR', 'KESİN', 'KILIÇ', 'KİLİM', 'KİLİT', 'KİRAZ',
+  'KİTAP', 'KLİMA', 'KOMŞU', 'KONAK', 'KOPUŞ', 'KORKU', 'KOVAN', 'KOYUN', 'KÖPEK', 'KÖPRÜ',
   'KÖYLÜ', 'KUCAK', 'KUKLA', 'KUMRU', 'KURGU', 'KUZEY', 'KÜÇÜK', 'KÜREK',
   // L
   'LAMBA', 'LİMON', 'LOKMA',
@@ -54,7 +56,7 @@ export const WORDS: string[] = [
   'VAHŞİ', 'VAPUR', 'VATAN', 'VERİM', 'VEZİR', 'VİLLA',
   // Y
   'YAFTA', 'YAKIN', 'YALAN', 'YAPIM', 'YARIN', 'YATAK', 'YAZAR', 'YEMİN', 'YEMEK', 'YENİK',
-  'YEŞİL', 'YIRMI', 'YÜZME', 'YÜZÜK',
+  'YEŞİL', 'YİRMİ', 'YÜZME', 'YÜZÜK',
   // Z
   'ZAMAN', 'ZEMİN', 'ZİYAN', 'ZÜMRE',
 ];
@@ -70,7 +72,7 @@ export function getDailyWord(): string {
 // All valid Turkish uppercase letters
 export const VALID_LETTERS = new Set('ABCÇDEFGĞHIİJKLMNOÖPRSŞTUÜVYZ'.split(''));
 
-// Lazy-load the full 5605-word validation set only when needed
+// Lazy-load the full 5591-word validation set only when needed
 let _validWords: Set<string> | null = null;
 
 export async function loadValidWords(): Promise<Set<string>> {
